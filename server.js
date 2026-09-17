@@ -12,6 +12,17 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
+// The original single-team game uses id 1, so its saved progress stays with Fomenko.
+const teamIds = Object.freeze({ fomenko: 1, lvovsky: 2, shabanov: 3, kozhanov: 4 });
+function teamId(req, res) {
+  const key = req.query.team ?? 'fomenko';
+  if (typeof key !== 'string' || !Object.hasOwn(teamIds, key)) {
+    res.status(400).json({ error: 'Неизвестная команда.' });
+    return null;
+  }
+  return teamIds[key];
+}
+
 let tableReady;
 function ensureTable() {
   if (!process.env.DATABASE_URL) {
@@ -57,9 +68,11 @@ function databaseError(res, error) {
 
 // Получить состояние игры
 app.get('/api/game-state', async (req, res) => {
+  const id = teamId(req, res);
+  if (id === null) return;
   try {
     await ensureTable();
-    const result = await pool.query('SELECT data FROM game_state WHERE id = 1');
+    const result = await pool.query('SELECT data FROM game_state WHERE id = $1', [id]);
     res.json(result.rows[0]?.data ?? {});
   } catch (err) {
     databaseError(res, err);
@@ -68,14 +81,16 @@ app.get('/api/game-state', async (req, res) => {
 
 // Сохранить состояние
 app.post('/api/game-state', async (req, res) => {
+  const id = teamId(req, res);
+  if (id === null) return;
   try {
     await ensureTable();
     await pool.query(
       `INSERT INTO game_state (id, data, updated_at)
-       VALUES (1, $1::jsonb, now())
+       VALUES ($1, $2::jsonb, now())
        ON CONFLICT (id) DO UPDATE
        SET data = EXCLUDED.data, updated_at = EXCLUDED.updated_at`,
-      [JSON.stringify(req.body)]
+      [id, JSON.stringify(req.body)]
     );
     res.json({ ok: true });
   } catch (err) {
