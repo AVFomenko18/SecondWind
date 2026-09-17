@@ -14,6 +14,7 @@ const pool = new Pool({
 
 // The original single-team game uses id 1, so its saved progress stays with Fomenko.
 const teamIds = Object.freeze({ fomenko: 1, lvovsky: 2, shabanov: 3, kozhanov: 4 });
+const teamNames = Object.freeze({ fomenko: 'Фоменко', lvovsky: 'Львовский', shabanov: 'Шабанов', kozhanov: 'Кожанов' });
 function teamId(req, res) {
   const key = req.query.team ?? 'fomenko';
   if (typeof key !== 'string' || !Object.hasOwn(teamIds, key)) {
@@ -95,6 +96,55 @@ app.post('/api/game-state', async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     databaseError(res, err);
+  }
+});
+
+function nonnegativeNumber(value) {
+  return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+function stepsFromHistory(player, logs) {
+  if (!Array.isArray(logs)) return nonnegativeNumber(player.high);
+  const joinedAt = logs.findIndex(entry => entry?.text === `${player.name} присоединяется к игре`);
+  const currentLogs = joinedAt < 0 ? logs : logs.slice(0, joinedAt);
+  const prefix = `${player.name}: дистанция `;
+  const steps = currentLogs.reduce((total, entry) => {
+    const text = entry?.text;
+    if (typeof text !== 'string' || !text.startsWith(prefix)) return total;
+    const match = text.match(/потрачено ([1-6]) шаг\./);
+    return total + (match ? Number(match[1]) : 0);
+  }, 0);
+  // Older imported saves might have distance but no detailed move history.
+  return steps || (joinedAt < 0 ? nonnegativeNumber(player.high) : 0);
+}
+
+app.get('/api/department', async (req, res) => {
+  try {
+    await ensureTable();
+    const result = await pool.query('SELECT id, data, updated_at FROM game_state WHERE id = ANY($1::int[])', [Object.values(teamIds)]);
+    const byId = new Map(result.rows.map(row => [Number(row.id), row]));
+    const teams = Object.entries(teamIds).map(([key, id]) => {
+      const row = byId.get(id);
+      const game = row?.data || {};
+      const ledger = Array.isArray(game.ledger) ? game.ledger : [];
+      const players = (Array.isArray(game.players) ? game.players : []).map(player => ({
+        id: String(player.id ?? ''),
+        name: String(player.name ?? 'Участник'),
+        steps: stepsFromHistory(player, game.logs),
+        revenue: nonnegativeNumber(player.cash),
+        calls: nonnegativeNumber(player.calls),
+        crossSales: nonnegativeNumber(player.cross),
+        coins: ledger.reduce((sum, item) => sum + (item?.playerId === player.id && ['milestone', 'challenge'].includes(item?.source) ? nonnegativeNumber(item.amount) : 0), 0)
+      }));
+      const totals = players.reduce((sum, player) => {
+        for (const key of ['steps', 'revenue', 'calls', 'crossSales', 'coins']) sum[key] += player[key];
+        return sum;
+      }, { steps: 0, revenue: 0, calls: 0, crossSales: 0, coins: 0 });
+      return { key, name: teamNames[key], players, totals, saved: Boolean(row), updatedAt: game.updated ?? row?.updated_at ?? null };
+    });
+    res.json({ teams });
+  } catch (error) {
+    databaseError(res, error);
   }
 });
 
