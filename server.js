@@ -4,7 +4,7 @@ import pg from 'pg';
 const { Pool } = pg;
 const app = express();
 
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '30mb' }));
 app.use(express.static('.'));
 
 const pool = new Pool({
