@@ -1,11 +1,78 @@
 import express from 'express';
 import pg from 'pg';
+import { createHmac, createHash, timingSafeEqual } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 
 const { Pool } = pg;
 const app = express();
 
 app.use(express.json({ limit: '30mb' }));
 app.use(express.static('.'));
+
+const ADMIN_COOKIE = 'secondwind_admin';
+const SESSION_MS = 8 * 60 * 60 * 1000;
+const loginAttempts = new Map();
+function equalSecret(a, b) {
+  const left = createHash('sha256').update(a).digest();
+  const right = createHash('sha256').update(b).digest();
+  return timingSafeEqual(left, right);
+}
+function signature(expires) {
+  return createHmac('sha256', process.env.ADMIN_PASSWORD).update(`secondwind-admin:${expires}`).digest('hex');
+}
+function isAdmin(req) {
+  if (!process.env.ADMIN_PASSWORD) return false;
+  const cookie = (req.headers.cookie || '').split(';').map(x => x.trim()).find(x => x.startsWith(`${ADMIN_COOKIE}=`));
+  const match = cookie?.slice(ADMIN_COOKIE.length + 1).match(/^(\d{13})\.([a-f0-9]{64})$/);
+  return Boolean(match && Number(match[1]) > Date.now() && equalSecret(match[2], signature(match[1])));
+}
+function sameOrigin(req) {
+  const origin = req.get('origin');
+  if (!origin) return true;
+  const forwardedHost = req.get('x-forwarded-host') || req.get('host');
+  const protocol = req.get('x-forwarded-proto') || req.protocol;
+  return origin === `${protocol}://${forwardedHost}`;
+}
+function adminCookie(req, value, maxAge) {
+  const secure = req.secure || req.get('x-forwarded-proto') === 'https';
+  return `${ADMIN_COOKIE}=${value}; Path=/api; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${secure ? '; Secure' : ''}`;
+}
+app.get('/api/admin/session', (req, res) => res.json({ authenticated: isAdmin(req), configured: Boolean(process.env.ADMIN_PASSWORD) }));
+app.post('/api/admin/login', (req, res) => {
+  if (!sameOrigin(req)) return res.status(403).json({ error: 'Недопустимый источник запроса.' });
+  if (!process.env.ADMIN_PASSWORD) return res.status(503).json({ error: 'На Render не задан ADMIN_PASSWORD. Руководитель должен добавить его в Environment.' });
+  const key = req.ip;
+  const attempt = loginAttempts.get(key) || { count: 0, until: 0 };
+  if (attempt.until > Date.now()) return res.status(429).json({ error: 'Слишком много попыток. Повторите через 15 минут.' });
+  const password = req.body?.password;
+  if (typeof password !== 'string' || !equalSecret(password, process.env.ADMIN_PASSWORD)) {
+    attempt.count++;
+    if (attempt.count >= 5) { attempt.count = 0; attempt.until = Date.now() + 15 * 60 * 1000; }
+    loginAttempts.set(key, attempt);
+    return res.status(401).json({ error: 'Неверный пароль.' });
+  }
+  loginAttempts.delete(key);
+  const expires = String(Date.now() + SESSION_MS);
+  res.setHeader('Set-Cookie', adminCookie(req, `${expires}.${signature(expires)}`, SESSION_MS / 1000));
+  res.json({ authenticated: true });
+});
+app.post('/api/admin/logout', (req, res) => {
+  if (!sameOrigin(req)) return res.status(403).json({ error: 'Недопустимый источник запроса.' });
+  res.setHeader('Set-Cookie', adminCookie(req, '', 0));
+  res.json({ authenticated: false });
+});
+
+function protectedChange(before, after) {
+  if (!before || Object.keys(before).length === 0) return false;
+  if (!after || typeof after !== 'object') return true;
+  if (!isDeepStrictEqual(before.config, after.config) || before.id !== after.id) return true;
+  const oldLogs = Array.isArray(before.logs) ? before.logs : [];
+  const newLogs = Array.isArray(after.logs) ? after.logs : [];
+  if (newLogs.length < oldLogs.length || (oldLogs.length > 0 && !isDeepStrictEqual(newLogs.slice(-oldLogs.length), oldLogs))) return true;
+  const oldChallenges = (Array.isArray(before.ledger) ? before.ledger : []).filter(x => x?.source === 'challenge');
+  const newChallenges = (Array.isArray(after.ledger) ? after.ledger : []).filter(x => x?.source === 'challenge');
+  return !isDeepStrictEqual(oldChallenges, newChallenges);
+}
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -84,8 +151,13 @@ app.get('/api/game-state', async (req, res) => {
 app.post('/api/game-state', async (req, res) => {
   const id = teamId(req, res);
   if (id === null) return;
+  if (!sameOrigin(req)) return res.status(403).json({ error: 'Недопустимый источник запроса.' });
   try {
     await ensureTable();
+    const current = await pool.query('SELECT data FROM game_state WHERE id = $1', [id]);
+    if (!isAdmin(req) && (!current.rows.length || protectedChange(current.rows[0]?.data, req.body))) {
+      return res.status(403).json({ error: 'Изменять настройки, историю и челленджи может только руководитель группы.' });
+    }
     await pool.query(
       `INSERT INTO game_state (id, data, updated_at)
        VALUES ($1, $2::jsonb, now())
