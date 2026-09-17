@@ -132,14 +132,15 @@ app.get('/api/department', async (req, res) => {
         name: String(player.name ?? 'Участник'),
         steps: stepsFromHistory(player, game.logs),
         revenue: nonnegativeNumber(player.cash),
+        laps: Math.floor(nonnegativeNumber(player.high) / 60),
         calls: nonnegativeNumber(player.calls),
         crossSales: nonnegativeNumber(player.cross),
         coins: ledger.reduce((sum, item) => sum + (item?.playerId === player.id && ['milestone', 'challenge'].includes(item?.source) ? nonnegativeNumber(item.amount) : 0), 0)
       }));
       const totals = players.reduce((sum, player) => {
-        for (const key of ['steps', 'revenue', 'calls', 'crossSales', 'coins']) sum[key] += player[key];
+        for (const key of ['steps', 'revenue', 'laps', 'calls', 'crossSales', 'coins']) sum[key] += player[key];
         return sum;
-      }, { steps: 0, revenue: 0, calls: 0, crossSales: 0, coins: 0 });
+      }, { steps: 0, revenue: 0, laps: 0, calls: 0, crossSales: 0, coins: 0 });
       return { key, name: teamNames[key], players, totals, saved: Boolean(row), updatedAt: game.updated ?? row?.updated_at ?? null };
     });
     res.json({ teams });
