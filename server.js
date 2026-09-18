@@ -358,7 +358,7 @@ app.post('/api/open-case', async (req, res) => {
     next.rewards.push(reward);
     next.ledger.push({ id: randomUUID(), playerId, amount: -CASE_COST, source: 'purchase', ref: requestId,
       title: `Кейс: ${prize.name}`, at });
-    next.logs.unshift({ id: randomUUID(), at, text: `${player.name}: открыл(а) кейс за ${CASE_COST} мон. и получил(а) «${prize.name}».` });
+    next.logs.unshift({ id: randomUUID(), at, text: `${player.name}: открыл/а кейс за ${CASE_COST} мон. и получил/а «${prize.name}».` });
     next.updated = at;
     next.undo = null;
     await client.query('UPDATE game_state SET data = $2::jsonb, updated_at = now() WHERE id = $1', [id, JSON.stringify(next)]);
