@@ -11,7 +11,7 @@ const NEW_SHOP_PRIZES = Object.freeze([
   { id: 'prize-21', name: 'Забрать оплату у робота Алёши · до 50 000 ₽', cost: 7, enabled: true },
   { id: 'prize-22', name: 'Индивидуальная гифка с менеджером', cost: 2, enabled: true }
 ]);
-const SUPER_PRIZE_LIMITS = Object.freeze({ 'prize-20': 5, 'prize-21': 5 });
+const SUPER_PRIZE_LIMITS = Object.freeze({ 'prize-8': 5, 'prize-9': 5, 'prize-20': 5, 'prize-21': 5 });
 
 app.use(express.json({ limit: '30mb' }));
 app.use(express.static('.'));
@@ -158,7 +158,16 @@ function ensureTable() {
         )
       `);
       for (const id of Object.keys(SUPER_PRIZE_LIMITS)) {
-        await pool.query('INSERT INTO super_prize_inventory (prize_id) VALUES ($1) ON CONFLICT DO NOTHING', [id]);
+        await pool.query(`
+          INSERT INTO super_prize_inventory (prize_id, purchased)
+          SELECT $1, LEAST($2::integer, COUNT(*)::integer)
+          FROM game_state
+          CROSS JOIN LATERAL jsonb_array_elements(
+            CASE WHEN jsonb_typeof(data->'rewards') = 'array' THEN data->'rewards' ELSE '[]'::jsonb END
+          ) AS reward(item)
+          WHERE reward.item->>'prizeId' = $1 AND reward.item->>'cancelled' IS DISTINCT FROM 'true'
+          ON CONFLICT DO NOTHING
+        `, [id, SUPER_PRIZE_LIMITS[id]]);
       }
       for (const prize of NEW_SHOP_PRIZES) {
         await pool.query(`
