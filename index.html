@@ -235,9 +235,9 @@ async function loadRewardFeed(){
       rewardFeedSignature=signature;
       list.innerHTML=entries.length?entries.map(item=>{
         const cost=Number(item.cost)||0;
-        const verb=item.case?'открыл/а':'купил/а';
+        const verb=item.case?'открыл(а)':'купил(а)';
         const when=new Date(item.at).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
-        return '<article class="reward-feed-item '+(item.superPrize?'super':'')+'">'+(item.superPrize?'<strong>✨ СУПЕР-ПРИЗ ✨</strong><br>':'')+'<b>'+esc(item.player)+'</b> '+(item.case?verb+' кейс за '+cost+' '+coinWord(cost)+' 🪙 и получил/а «'+esc(item.title)+'»':verb+' «'+esc(item.title)+'» за '+cost+' '+coinWord(cost)+' 🪙')+'<time>'+esc(when)+' · команда '+esc(item.team)+'</time></article>';
+        return '<article class="reward-feed-item '+(item.superPrize?'super':'')+'">'+(item.superPrize?'<strong>✨ СУПЕР-ПРИЗ ✨</strong><br>':'')+'<b>'+esc(item.player)+'</b> '+(item.case?verb+' кейс за '+cost+' '+coinWord(cost)+' 🪙 и получил(а) «'+esc(item.title)+'»':verb+' «'+esc(item.title)+'» за '+cost+' '+coinWord(cost)+' 🪙')+'<time>'+esc(when)+' · команда '+esc(item.team)+'</time></article>';
       }).join(''):'<p class="reward-feed-empty">Покупок пока нет. Первая награда скоро появится здесь.</p>';
       if(wasAtTop)list.scrollTop=0;
     }

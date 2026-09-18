@@ -23,7 +23,7 @@ test('reward feed uses neutral verbs without guessing gender from names', async 
   vm.createContext(context);
   vm.runInContext(html.slice(start, end), context);
   await context.loadRewardFeed();
-  assert.match(list.innerHTML, /Саша<\/b> открыл\/а кейс за 2 монеты 🪙 и получил\/а «Day off»/);
-  assert.match(list.innerHTML, /Никита<\/b> купил\/а «Обед»/);
+  assert.match(list.innerHTML, /Саша<\/b> открыл\(а\) кейс за 2 монеты 🪙 и получил\(а\) «Day off»/);
+  assert.match(list.innerHTML, /Никита<\/b> купил\(а\) «Обед»/);
   assert.doesNotMatch(list.innerHTML, /открыла|купила/);
 });
