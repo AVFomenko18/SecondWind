@@ -21,6 +21,11 @@ test('removed prize is absent from new and previously saved department catalogs'
   ]);
   assert.equal(stored.some(item => item.id === 'prize-0'), false);
   assert.equal(stored.some(item => item.id === 'custom-bonus'), true);
+  const food = stored.find(item => item.id === 'prize-23');
+  assert.equal(food?.name, 'Доставка еды от босса');
+  assert.equal(food?.cost, 7);
+  assert.equal(food?.superPrize, true);
+  assert.equal(food?.stockLimit, 5);
 });
 
 test('new game and imported backup omit the removed prize', () => {

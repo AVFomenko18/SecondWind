@@ -10,9 +10,10 @@ const app = express();
 const NEW_SHOP_PRIZES = Object.freeze([
   { id: 'prize-20', name: 'Day off · дополнительный выходной', cost: 7, enabled: true },
   { id: 'prize-21', name: 'Забрать оплату у робота Алёши · до 50 000 ₽', cost: 7, enabled: true },
-  { id: 'prize-22', name: 'Индивидуальная гифка с менеджером', cost: 2, enabled: true }
+  { id: 'prize-22', name: 'Индивидуальная гифка с менеджером', cost: 2, enabled: true },
+  { id: 'prize-23', name: 'Доставка еды от босса', cost: 7, enabled: true }
 ]);
-const INITIAL_SUPER_PRIZE_LIMITS = Object.freeze({ 'prize-8': 5, 'prize-9': 5, 'prize-20': 5, 'prize-21': 5 });
+const INITIAL_SUPER_PRIZE_LIMITS = Object.freeze({ 'prize-8': 5, 'prize-9': 5, 'prize-20': 5, 'prize-21': 5, 'prize-23': 5 });
 const DEFAULT_SHOP_NAMES = ['Закончить день на час раньше', 'Обед 1,5 часа', 'День без встреч', 'День без отчётов', 'Несгораемый день', 'Отказаться от 3 лидов', '+5 курсов в распределение', 'Сертификат 1 000 ₽', 'Кино от босса'];
 const DEFAULT_SHOP_COSTS = [2, 1, 3, 2, 3, 2, 3, 4, 2];
 const DEFAULT_SHOP = DEFAULT_SHOP_NAMES.map((name, index) => ({ id: `prize-${index + 1}`, name, cost: DEFAULT_SHOP_COSTS[index], enabled: true })).concat(NEW_SHOP_PRIZES);
