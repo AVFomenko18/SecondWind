@@ -67,6 +67,46 @@ test('the wheel has every ordinary prize, three souvenir and three super prize s
   assert.match(context.caseWheelView(options), /Сувенир/);
 });
 
+test('wheel labels and hub are upright again after the spin stops', async () => {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  assert.equal((html.match(/rotate\(calc\(var\(--counter-angle\) \+ var\(--label-counter-rotation, 0deg\)\)\)/g) || []).length, 2);
+  assert.match(html, /\.case-wheel-hub\{[^}]*rotate\(var\(--label-counter-rotation, 0deg\)\)/);
+  const start = html.indexOf('function alignCaseWheelLabels(wheel,rotation){');
+  const end = html.indexOf('function finishCaseWheel(outcome){', start);
+  assert.ok(start >= 0 && end > start);
+  const style = { setProperty(name, value) { this[name] = value; } };
+  const wheel = { style };
+  let finished = false;
+  const entries = ['a', 'b', 'c', 'd'].map(id => ({ id }));
+  const context = {
+    document: { getElementById: () => wheel }, caseCatalog: { items: entries },
+    caseWheelEntries: () => entries, finishCaseWheel: () => { finished = true; },
+    window: { matchMedia: () => ({ matches: true }) }
+  };
+  vm.createContext(context);
+  vm.runInContext(html.slice(start, end), context);
+  await context.animateCaseWheel({ phase: 'reward', reward: { prizeId: 'b' } });
+  const rotation = Number(style.transform.match(/rotate\(([-\d.]+)deg\)/)[1]);
+  const counter = Number(style['--label-counter-rotation'].replace('deg', ''));
+  assert.equal(((rotation + counter) % 360 + 360) % 360, 0);
+  assert.equal(finished, true);
+
+  let transitionEnd;
+  finished = false;
+  wheel.addEventListener = (_name, listener) => { transitionEnd = listener; };
+  wheel.classList = { add: () => {} };
+  context.window.matchMedia = () => ({ matches: false });
+  context.setTimeout = () => 1;
+  context.clearTimeout = () => {};
+  context.requestAnimationFrame = callback => callback();
+  const animation = context.animateCaseWheel({ phase: 'reward', reward: { prizeId: 'b' } });
+  transitionEnd({ propertyName: 'transform' });
+  await animation;
+  assert.equal(finished, true);
+  assert.equal(((Number(style.transform.match(/rotate\(([-\d.]+)deg\)/)[1]) +
+    Number(style['--label-counter-rotation'].replace('deg', ''))) % 360 + 360) % 360, 0);
+});
+
 test('public case catalog does not return probability weights', () => {
   const server = readFileSync(new URL('../server.js', import.meta.url), 'utf8');
   const start = server.indexOf("app.get('/api/case-catalog'");

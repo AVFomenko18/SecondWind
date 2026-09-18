@@ -110,12 +110,12 @@ header .header-team-navigation .team-tabs{width:100%;flex:0 0 auto;justify-conte
 .case-wheel-pointer{position:absolute;z-index:4;top:-16px;left:50%;transform:translateX(-50%);font-size:38px;line-height:1;color:#ffe08e;text-shadow:0 3px 0 #143929,0 4px 8px #0d281c}
 .case-wheel-disk{position:relative;width:100%;height:100%;border:10px solid #d6ab57;border-radius:50%;box-shadow:0 0 0 7px #f9e9ba,0 12px 30px #082b1d80,inset 0 0 0 2px #fff4ce;transform:rotate(0deg)}
 .case-wheel-disk.spinning{transition:transform 10s cubic-bezier(.12,.72,.08,1)}
-.case-wheel-label{position:absolute;left:50%;top:50%;width:96px;min-height:50px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;text-align:center;color:#214435;font-weight:800;line-height:1.08;transform:translate(-50%,-50%) rotate(var(--angle)) translateY(-196px) rotate(var(--counter-angle));pointer-events:none}
+.case-wheel-label{position:absolute;left:50%;top:50%;width:96px;min-height:50px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;text-align:center;color:#214435;font-weight:800;line-height:1.08;transform:translate(-50%,-50%) rotate(var(--angle)) translateY(-196px) rotate(calc(var(--counter-angle) + var(--label-counter-rotation, 0deg)));pointer-events:none}
 .case-wheel-label span{font-size:20px}.case-wheel-label small{font-size:10px;max-height:34px;overflow:hidden}.case-wheel-label.super{color:#5c3613;text-shadow:0 1px #ffecc1}.case-wheel-label.super span{font-size:23px}
-.case-wheel-hub{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;justify-content:center;width:104px;height:104px;border:7px solid #d2a44d;border-radius:50%;background:#244d3c;color:#fff3c9;font-size:29px;box-shadow:0 2px 12px #1b392c99}.case-wheel-hub small{font-size:9px;line-height:1.2;text-align:center}
+.case-wheel-hub{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(var(--label-counter-rotation, 0deg));display:flex;flex-direction:column;align-items:center;justify-content:center;width:104px;height:104px;border:7px solid #d2a44d;border-radius:50%;background:#244d3c;color:#fff3c9;font-size:29px;box-shadow:0 2px 12px #1b392c99}.case-wheel-hub small{font-size:9px;line-height:1.2;text-align:center}
 .case-wheel-empty{padding:70px 12px;text-align:center}.case-minis{margin-top:18px}.case-mini-list{display:flex;flex-wrap:wrap;gap:8px}.case-mini-list span{padding:8px 10px;border:1px solid #dbc69b;border-radius:999px;background:#fbf4df;font-size:12px}
 .chest-dialog{box-sizing:border-box;width:min(760px,calc(100vw - 24px));max-width:none;padding:0;border:4px double #d6ac5d;border-radius:22px;background:radial-gradient(circle at 50% 0,#386c50,#173d30 75%);color:#fff2ce;text-align:center}.chest-content{padding:30px}.chest-dialog h2{font:700 clamp(30px,4vw,46px) Georgia,serif;margin:8px 0}.chest-dialog p{color:#e3ddc0}.chest-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:24px}.chest-options button{min-height:165px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;border:2px solid #d9bd7c;border-radius:15px;background:#fff4d9;color:#284a39}.chest-options button span{font-size:52px}.chest-options button small{font-weight:800}.chest-options button:hover:not(:disabled){transform:translateY(-4px);box-shadow:0 9px 22px #071b13aa}.chest-options button.chosen{border-color:#ffdb71;background:#fce8ab}.chest-options button.revealed small{font-size:12px;line-height:1.2}
-@media(max-width:650px){.case-wheel-stage{width:min(100%,330px)}.case-wheel-label{width:59px;min-height:35px;transform:translate(-50%,-50%) rotate(var(--angle)) translateY(-116px) rotate(var(--counter-angle))}.case-wheel-label span{font-size:15px}.case-wheel-label small{font-size:7px;max-height:28px}.case-wheel-hub{width:76px;height:76px;font-size:20px}.chest-options{gap:6px}.chest-options button{min-height:125px;padding:4px}.chest-options button span{font-size:34px}}
+@media(max-width:650px){.case-wheel-stage{width:min(100%,330px)}.case-wheel-label{width:59px;min-height:35px;transform:translate(-50%,-50%) rotate(var(--angle)) translateY(-116px) rotate(calc(var(--counter-angle) + var(--label-counter-rotation, 0deg)))}.case-wheel-label span{font-size:15px}.case-wheel-label small{font-size:7px;max-height:28px}.case-wheel-hub{width:76px;height:76px;font-size:20px}.chest-options{gap:6px}.chest-options button{min-height:125px;padding:4px}.chest-options button span{font-size:34px}}
 @media(prefers-reduced-motion:reduce){.case-wheel-disk.spinning{transition-duration:.01ms}}
 </style><style>
 .custom-avatar{display:block;object-fit:contain;background-image:none!important;background-color:#fff9e9}
@@ -373,6 +373,7 @@ async function openCase(){
     void loadPrizeStock();void loadCaseCatalog();void loadRewardFeed();
   }catch(error){caseOpening=false;if(committed){render();if(phase==='chests')showChestDialog();else if(caseLastReward)finishCaseAnimation(caseLastReward);return}render();toast(error.message||'Не удалось открыть кейс. Повторите попытку.');const result=document.getElementById('caseResult');if(result)result.textContent=error.message||'Ошибка открытия кейса'}
 }
+function alignCaseWheelLabels(wheel,rotation){const normalized=((rotation%360)+360)%360;wheel.style.setProperty('--label-counter-rotation',-normalized+'deg')}
 function animateCaseWheel(outcome){
   const wheel=document.getElementById('caseWheelDisk'),entries=caseWheelEntries(caseCatalog?.items||[]);
   if(!wheel||!entries.length){finishCaseWheel(outcome);return Promise.resolve()}
@@ -381,10 +382,10 @@ function animateCaseWheel(outcome){
     : entries.map((item,index)=>(outcome.reward?.souvenir?item.souvenirSector:item.id===outcome.reward?.prizeId)?index:-1).filter(index=>index>=0);
   const targetIndex=candidates[Math.floor(Math.random()*candidates.length)]??0;
   const target=360*8-(targetIndex+.5)*360/entries.length;
-  if(window.matchMedia('(prefers-reduced-motion: reduce)').matches){wheel.style.transform='rotate('+target+'deg)';finishCaseWheel(outcome);return Promise.resolve()}
+  if(window.matchMedia('(prefers-reduced-motion: reduce)').matches){wheel.style.transform='rotate('+target+'deg)';alignCaseWheelLabels(wheel,target);finishCaseWheel(outcome);return Promise.resolve()}
   return new Promise(resolve=>{
     let settled=false;
-    const done=()=>{if(settled)return;settled=true;clearTimeout(timer);finishCaseWheel(outcome);resolve()};
+    const done=()=>{if(settled)return;settled=true;clearTimeout(timer);alignCaseWheelLabels(wheel,target);finishCaseWheel(outcome);resolve()};
     const timer=setTimeout(done,10800);
     wheel.addEventListener('transitionend',event=>{if(event.propertyName==='transform')done()},{once:true});
     requestAnimationFrame(()=>requestAnimationFrame(()=>{wheel.classList.add('spinning');wheel.style.transform='rotate('+target+'deg)'}));
