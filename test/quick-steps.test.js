@@ -13,6 +13,7 @@ function setup() {
   const messages = [], animations = [];
   const context = {
     state: { config: { actions: [] } }, pnow: () => player, writable: () => true,
+    esc: value => String(value),
     day: () => '2026-09-18', actionAnchor: () => ({ left: 10, top: 10, width: 50 }),
     snapshot: () => {}, commit: () => {}, log: text => messages.push(text), toast: text => messages.push(text),
     showEarnedPop: (amount, icon) => animations.push({ amount, icon })
@@ -59,6 +60,22 @@ test('game field shows six direct buttons instead of amount inputs', () => {
   const view = context.quickActionsView();
   assert.equal((view.match(/class="quick-step-button/g) || []).length, 6);
   assert.match(view, /Три звонка с мощным дожимом/);
-  assert.match(view, /½ 👟/);
+  assert.match(view, /💳/);
+  assert.match(view, /⚡/);
+  assert.match(view, /🤝/);
+  assert.match(view, /☎️/);
+  assert.match(view, /0,5 шага/);
+  assert.doesNotMatch(view, /👟|Всего оплат|учтено дней|Всего кросс-сейлов|Дополнительные действия/);
   assert.doesNotMatch(view, /type="number"/);
+});
+
+test('field controls omit the selected player balance and helper captions', () => {
+  const from = html.indexOf('function fieldControls(){');
+  const to = html.indexOf('function toggleWideField(button){', from);
+  const context = { quickActionsView: () => '<div>Кнопки</div>' };
+  vm.createContext(context);
+  vm.runInContext(html.slice(from, to), context);
+  const view = context.fieldControls();
+  assert.match(view, /Кнопки/);
+  assert.doesNotMatch(view, /в запасе|Накоплено|Дополнительные действия/);
 });
