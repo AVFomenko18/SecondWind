@@ -2,7 +2,7 @@ import express from 'express';
 import pg from 'pg';
 import { createHmac, createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
-import { CASE_COST, casePool, drawCasePrize } from './case.js';
+import { CASE_COST, MINI_PRIZES, casePool, drawCaseOutcome, createChestRound } from './case.js';
 
 const { Pool } = pg;
 const app = express();
@@ -243,6 +243,17 @@ function ensureTable() {
         )
       `);
       await pool.query('ALTER TABLE super_prize_inventory ADD COLUMN IF NOT EXISTS limit_count integer NOT NULL DEFAULT 5');
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS case_rounds (
+          team_id integer NOT NULL,
+          request_id text NOT NULL,
+          player_id text NOT NULL,
+          data jsonb NOT NULL,
+          resolved jsonb,
+          created_at timestamptz NOT NULL DEFAULT now(),
+          PRIMARY KEY (team_id, request_id)
+        )
+      `);
       await pool.query(`CREATE TABLE IF NOT EXISTS department_shop (id integer PRIMARY KEY CHECK (id = 1), data jsonb NOT NULL)`);
       await pool.query(`CREATE TABLE IF NOT EXISTS department_rules (id integer PRIMARY KEY CHECK (id = 1), data jsonb NOT NULL)`);
       let rulesResult = await pool.query('SELECT data FROM department_rules WHERE id = 1');
@@ -378,8 +389,9 @@ app.get('/api/case-catalog', async (_req, res) => {
     ]);
     const items = casePool(catalog.rows[0].data, inventory.rows);
     res.setHeader('Cache-Control', 'no-store');
-    res.json({ cost: CASE_COST, items: items.map(({ id, name, cost, superPrize, remaining }) =>
-      ({ id, name, cost, superPrize, remaining })) });
+    res.json({ cost: CASE_COST, superChestChance: 10, miniPrizes: MINI_PRIZES,
+      items: items.map(({ id, name, cost, superPrize, remaining }) =>
+        ({ id, name, cost, superPrize, remaining })) });
   } catch (error) {
     databaseError(res, error);
   }
@@ -406,7 +418,20 @@ app.post('/api/open-case', async (req, res) => {
     if (existing) {
       await client.query('COMMIT');
       res.setHeader('ETag', stateETag(before));
-      return res.json({ state: before, reward: existing });
+      return res.json({ state: before, phase: 'reward', reward: existing });
+    }
+    const previousRound = await client.query('SELECT player_id, resolved FROM case_rounds WHERE team_id = $1 AND request_id = $2 FOR UPDATE', [id, requestId]);
+    if (previousRound.rows.length) {
+      await client.query('COMMIT');
+      res.setHeader('ETag', stateETag(before));
+      const round = previousRound.rows[0];
+      return res.json(round.resolved
+        ? { state: before, phase: 'reward', reward: round.resolved.reward }
+        : { state: before, phase: 'chests', roundId: requestId });
+    }
+    if (before.pendingCase) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'Сначала выберите шкатулку в предыдущем кейсе.' });
     }
     if (!current.rows.length || req.get('if-match') !== stateETag(before)) {
       await client.query('ROLLBACK');
@@ -425,25 +450,111 @@ app.post('/api/open-case', async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(409).json({ error: 'В кейсе пока нет доступных наград.' });
     }
-    const prize = drawCasePrize(items);
-    if (prize.superPrize) {
+    const outcome = drawCaseOutcome(items);
+    const prize = outcome.prize;
+    if (outcome.phase === 'chests') {
       const updated = await client.query('UPDATE super_prize_inventory SET purchased = purchased + 1 WHERE prize_id = $1 AND purchased < limit_count RETURNING purchased', [prize.id]);
       if (!updated.rows.length) throw new Error('CASE_STOCK_CHANGED');
     }
     const next = structuredClone(before);
     const at = new Date().toISOString();
-    const reward = { id: requestId, playerId, prizeId: prize.id, title: prize.name, cost: CASE_COST,
-      source: 'shop', superPrize: prize.superPrize, case: true, claimed: false, cancelled: false, at };
-    next.rewards.push(reward);
+    let reward = null;
+    if (outcome.phase === 'chests') {
+      const round = createChestRound(prize);
+      await client.query('INSERT INTO case_rounds (team_id, request_id, player_id, data) VALUES ($1, $2, $3, $4::jsonb)',
+        [id, requestId, playerId, JSON.stringify(round)]);
+      next.pendingCase = { requestId, playerId, at };
+    } else {
+      reward = { id: requestId, playerId, prizeId: prize.id, title: prize.name, cost: CASE_COST,
+        source: 'shop', superPrize: false, case: true, claimed: false, cancelled: false, at };
+      next.rewards.push(reward);
+    }
     next.ledger.push({ id: randomUUID(), playerId, amount: -CASE_COST, source: 'purchase', ref: requestId,
-      title: `Кейс: ${prize.name}`, at });
-    next.logs.unshift({ id: randomUUID(), at, text: `${player.name}: открыл(а) кейс за ${CASE_COST} мон. и получил(а) «${prize.name}».` });
+      title: outcome.phase === 'chests' ? 'Кейс: выбор шкатулки' : `Кейс: ${prize.name}`, at });
+    next.logs.unshift({ id: randomUUID(), at, text: outcome.phase === 'chests'
+      ? `${player.name}: открыл(а) кейс за ${CASE_COST} мон. и выбирает шкатулку.`
+      : `${player.name}: открыл(а) кейс за ${CASE_COST} мон. и получил(а) «${prize.name}».` });
     next.updated = at;
     next.undo = null;
     await client.query('UPDATE game_state SET data = $2::jsonb, updated_at = now() WHERE id = $1', [id, JSON.stringify(next)]);
     await client.query('COMMIT');
     res.setHeader('ETag', stateETag(next));
-    res.json({ state: next, reward });
+    res.json(outcome.phase === 'chests'
+      ? { state: next, phase: 'chests', roundId: requestId }
+      : { state: next, phase: 'reward', reward });
+  } catch (error) {
+    if (client) await client.query('ROLLBACK').catch(() => {});
+    databaseError(res, error);
+  } finally {
+    client?.release();
+  }
+});
+
+app.post('/api/choose-chest', async (req, res) => {
+  const id = teamId(req, res);
+  if (id === null) return;
+  if (!sameOrigin(req)) return res.status(403).json({ error: 'Недопустимый источник запроса.' });
+  const { requestId, chest } = req.body || {};
+  if (typeof requestId !== 'string' || !/^case-[a-f0-9-]{36}$/.test(requestId) || !Number.isSafeInteger(chest) || chest < 0 || chest > 2) {
+    return res.status(422).json({ error: 'Выберите одну из трёх шкатулок.' });
+  }
+  let client;
+  try {
+    await ensureTable();
+    client = await pool.connect();
+    await client.query('BEGIN');
+    const catalog = (await client.query('SELECT data FROM department_shop WHERE id = 1 FOR UPDATE')).rows[0].data;
+    const rules = (await client.query('SELECT data FROM department_rules WHERE id = 1 FOR UPDATE')).rows[0].data;
+    const current = await client.query('SELECT data FROM game_state WHERE id = $1 FOR UPDATE', [id]);
+    const before = withDepartmentConfig(current.rows[0]?.data ?? {}, catalog, rules);
+    const result = await client.query('SELECT player_id, data, resolved FROM case_rounds WHERE team_id = $1 AND request_id = $2 FOR UPDATE', [id, requestId]);
+    if (!result.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Раунд со шкатулками не найден.' });
+    }
+    const saved = result.rows[0];
+    if (saved.resolved) {
+      await client.query('COMMIT');
+      res.setHeader('ETag', stateETag(before));
+      return res.json({ state: before, ...saved.resolved });
+    }
+    if (before.pendingCase?.requestId !== requestId || before.pendingCase.playerId !== saved.player_id) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'Состояние кейса изменилось. Обновите страницу.' });
+    }
+    const player = before.players.find(item => item.id === saved.player_id);
+    if (!player) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'Участник кейса не найден.' });
+    }
+    const round = saved.data;
+    const superPrize = chest === round.position;
+    const consolation = superPrize ? null : round.miniPrizes[chest < round.position ? chest : chest - 1];
+    if (!superPrize) {
+      await client.query('UPDATE super_prize_inventory SET purchased = GREATEST(0, purchased - 1) WHERE prize_id = $1', [round.prize.id]);
+    }
+    const prize = superPrize ? round.prize : consolation;
+    const reward = { id: requestId, playerId: saved.player_id, prizeId: prize.id, title: prize.name, cost: CASE_COST,
+      source: 'shop', superPrize, miniPrize: !superPrize, case: true, claimed: false, cancelled: false, at: before.pendingCase.at };
+    const reveal = [0, 1, 2].map(index => index === round.position
+      ? { title: round.prize.name, superPrize: true }
+      : { title: round.miniPrizes[index < round.position ? index : index - 1].name, superPrize: false });
+    const next = structuredClone(before);
+    delete next.pendingCase;
+    next.rewards.push(reward);
+    const purchase = next.ledger.find(entry => entry.source === 'purchase' && entry.ref === requestId);
+    if (purchase) purchase.title = `Кейс: ${reward.title}`;
+    const at = new Date().toISOString();
+    next.logs.unshift({ id: randomUUID(), at,
+      text: `${player.name}: выбрал(а) шкатулку №${chest + 1} и получил(а) «${reward.title}»${superPrize ? ' · СУПЕР-ПРИЗ!' : ' · мини-приз'}.` });
+    next.updated = at;
+    next.undo = null;
+    const resolution = { reward, reveal, selectedChest: chest };
+    await client.query('UPDATE game_state SET data = $2::jsonb, updated_at = now() WHERE id = $1', [id, JSON.stringify(next)]);
+    await client.query('UPDATE case_rounds SET resolved = $3::jsonb WHERE team_id = $1 AND request_id = $2', [id, requestId, JSON.stringify(resolution)]);
+    await client.query('COMMIT');
+    res.setHeader('ETag', stateETag(next));
+    res.json({ state: next, ...resolution });
   } catch (error) {
     if (client) await client.query('ROLLBACK').catch(() => {});
     databaseError(res, error);
@@ -500,6 +611,14 @@ app.post('/api/game-state', async (req, res) => {
     if (req.get('if-match') !== stateETag(before)) {
       await client.query('ROLLBACK');
       return res.status(412).json({ error: 'Данные команды изменились в другой вкладке. Обновите страницу.' });
+    }
+    const pendingPurchase = before.pendingCase && before.ledger?.find(entry => entry.source === 'purchase' && entry.ref === before.pendingCase.requestId);
+    const incomingPurchase = before.pendingCase && Array.isArray(req.body?.ledger) && req.body.ledger.find(entry => entry.source === 'purchase' && entry.ref === before.pendingCase.requestId);
+    if (!isDeepStrictEqual(before.pendingCase ?? null, req.body?.pendingCase ?? null) ||
+        (before.pendingCase && (!Array.isArray(req.body?.players) || !req.body.players.some(player => player.id === before.pendingCase.playerId) ||
+          !isDeepStrictEqual(before.rewards, req.body?.rewards) || !isDeepStrictEqual(pendingPurchase, incomingPurchase)))) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'Сначала завершите выбор шкатулки.' });
     }
     if (!isAdmin(req) && (!current.rows.length || protectedChange(before, req.body))) {
       await client.query('ROLLBACK');

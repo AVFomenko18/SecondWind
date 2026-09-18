@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
-test('shop sells a case without showing percentage odds or offering a refund', () => {
+test('shop shows a prize wheel without percentage odds or a case refund', () => {
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   const start = html.indexOf('function caseIcon(item){');
   const end = html.indexOf('\nasync function openCase(){', start);
@@ -12,14 +12,17 @@ test('shop sells a case without showing percentage odds or offering a refund', (
   const context = {
     state: { players: [player], rewards: [{ playerId: player.id, title: 'Приз', cost: 2, source: 'shop', case: true, claimed: false, cancelled: false, at: '2026-09-18T10:28:00.000Z' }] },
     pnow: () => player, medals: () => 3, playerSelect: () => '<select></select>', esc: value => String(value),
-    caseCatalog: { cost: 2, items: [{ id: 'prize-0', name: 'Простой приз', cost: 1, superPrize: false },
-      { id: 'prize-20', name: 'Редкий приз', cost: 7, superPrize: true, remaining: 3 }] },
+    caseCatalog: { cost: 2, miniPrizes: [{ id: 'mini-call-potion', icon: '🧪', name: 'Зелье удачного дозвона' }],
+      items: [{ id: 'prize-0', name: 'Простой приз', cost: 1, superPrize: false },
+        { id: 'prize-20', name: 'Редкий приз', cost: 7, superPrize: true, remaining: 3 }] },
     caseLastReward: null, caseCatalogError: '', caseOpening: false, apiReady: true
   };
   vm.createContext(context);
   vm.runInContext(html.slice(start, end), context);
   const view = context.prizesView();
-  assert.match(view, /Открыть кейс/);
+  assert.match(view, /Крутить барабан/);
+  assert.match(view, /case-wheel-disk/);
+  assert.match(view, /Зелье удачного дозвона/);
   assert.match(view, /2 🪙 за открытие/);
   assert.doesNotMatch(view, /\d+[,.]?\d*%/);
   assert.doesNotMatch(view, /Шансы и доступные награды/);
@@ -28,26 +31,21 @@ test('shop sells a case without showing percentage odds or offering a refund', (
   assert.doesNotMatch(view, /buyPrize/);
 });
 
-test('the reel shows at most one nearby super prize', () => {
+test('the wheel has every ordinary prize and three super prize sectors', () => {
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-  const start = html.indexOf('function casePreviewItems(items){');
-  const end = html.indexOf('\nfunction prizesView(){', start);
+  const start = html.indexOf('function caseWheelEntries(items){');
+  const end = html.indexOf('function rewardDateTime(value){', start);
   assert.ok(start >= 0 && end > start);
-  const context = { Math };
+  const context = { esc: value => String(value), caseIcon: () => '⭐' };
   vm.createContext(context);
   vm.runInContext(html.slice(start, end), context);
   const ordinary = [{ id: 'a', name: 'Обед', cost: 1, superPrize: false }, { id: 'b', name: 'Выходной', cost: 2, superPrize: false }];
   const superPrizes = [{ id: 's1', name: 'Кино', cost: 5, superPrize: true }, { id: 's2', name: 'Day off', cost: 7, superPrize: true }];
   const options = [...ordinary, ...superPrizes];
-  assert.equal(context.casePreviewItems(options).slice(0, 7).filter(item => item.superPrize).length, 1);
-  assert.equal(context.casePreviewItems(superPrizes).slice(0, 7).filter(item => item.superPrize).length, 1);
-  for (const prize of [ordinary[0], superPrizes[0]]) {
-    for (let attempt = 0; attempt < 25; attempt++) {
-      const { sequence, winnerIndex } = context.caseSpinSequence(options.filter(item => item.id !== prize.id), prize);
-      assert.equal(sequence[winnerIndex].id, prize.id);
-      assert.equal(sequence.slice(winnerIndex - 3, winnerIndex + 4).filter(item => item.superPrize).length, 1);
-    }
-  }
+  const segments = context.caseWheelEntries(options);
+  assert.equal(segments.filter(item => item.chestSector).length, 3);
+  assert.deepEqual(Array.from(segments.filter(item => !item.chestSector).map(item => item.id)), ['a', 'b']);
+  assert.match(context.caseWheelView(options), /Супер-приз/);
 });
 
 test('public case catalog does not return probability weights', () => {
@@ -63,7 +61,7 @@ test('public case catalog does not return probability weights', () => {
 test('retrying an uncertain opening reuses its request id', async () => {
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   const start = html.indexOf('async function openCase(){');
-  const end = html.indexOf('\nfunction animateCase(reward){', start);
+  const end = html.indexOf('\nfunction animateCaseWheel(outcome){', start);
   const ids = [];
   const player = { id: 'player-1', name: 'Оля' };
   let attempts = 0;
@@ -73,12 +71,12 @@ test('retrying an uncertain opening reuses its request id', async () => {
     state: {}, crypto: { randomUUID: () => '00000000-0000-4000-8000-000000000001' },
     writable: () => true, pnow: () => player, medals: () => 3, confirm: () => true,
     render: () => {}, toast: () => {}, migrate: state => state, valid: () => true, syncStatus: () => {},
-    animateCase: async () => {}, loadPrizeStock: () => {}, loadCaseCatalog: () => {}, loadRewardFeed: () => {},
+    animateCaseWheel: async () => {}, loadPrizeStock: () => {}, loadCaseCatalog: () => {}, loadRewardFeed: () => {},
     document: { getElementById: () => ({ textContent: '' }) },
     fetch: async (_url, options) => {
       ids.push(JSON.parse(options.body).requestId);
       if (++attempts === 1) throw Error('Соединение прервалось');
-      return { ok: true, headers: { get: () => '"new"' }, json: async () => ({ state: {}, reward: { title: 'Приз' } }) };
+      return { ok: true, headers: { get: () => '"new"' }, json: async () => ({ state: {}, phase: 'reward', reward: { title: 'Приз' } }) };
     }
   };
   vm.createContext(context);
@@ -90,9 +88,9 @@ test('retrying an uncertain opening reuses its request id', async () => {
   assert.equal(context.caseRequestId, '');
 });
 
-test('case stays a surprise during the longer spin and celebrates the saved reward', () => {
+test('wheel stays a surprise during the longer spin and celebrates the saved reward', () => {
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-  assert.match(html, /case-reel\.spinning\{transition:transform 10s /);
+  assert.match(html, /case-wheel-disk\.spinning\{transition:transform 10s /);
   assert.match(html, /setTimeout\(done,10800\)/);
   const viewStart = html.indexOf('function caseIcon(item){');
   const viewEnd = html.indexOf('\nasync function openCase(){', viewStart);
@@ -107,7 +105,7 @@ test('case stays a surprise during the longer spin and celebrates the saved rewa
   vm.createContext(context);
   vm.runInContext(html.slice(viewStart, viewEnd), context);
   const spinningView = context.prizesView();
-  assert.match(spinningView, /Кейс открывается…/);
+  assert.match(spinningView, /Барабан вращается…/);
   assert.doesNotMatch(spinningView, /Выпало: Day off/);
   assert.doesNotMatch(spinningView, /<p>Day off<\/p>/);
   context.caseOpening = false;

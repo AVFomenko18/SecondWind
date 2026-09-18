@@ -1,6 +1,17 @@
 import { randomInt } from 'node:crypto';
 
 export const CASE_COST = 2;
+export const SUPER_CHEST_CHANCE = 0.10;
+export const MINI_PRIZES = Object.freeze([
+  { id: 'mini-bank-charm', name: 'Оберег от отказов банка', icon: '🧿' },
+  { id: 'mini-garlic', name: 'Золотой чеснок с логотипом Т-Банка', icon: '🧄' },
+  { id: 'mini-call-potion', name: 'Зелье удачного дозвона', icon: '🧪' },
+  { id: 'mini-objection-hammer', name: 'Молот отработки возражений', icon: '🔨' },
+  { id: 'mini-lead-compass', name: 'Компас горячих лидов', icon: '🧭' },
+  { id: 'mini-client-amulet', name: 'Амулет спокойного клиента', icon: '✨' },
+  { id: 'mini-script-feather', name: 'Перо идеального скрипта', icon: '🪶' },
+  { id: 'mini-deal-magnet', name: 'Магнит закрытых сделок', icon: '🧲' }
+]);
 
 export function caseWeight(item) {
   if (item.superPrize) return item.cost >= 7 ? 20 : item.cost >= 4 ? 50 : 100;
@@ -18,4 +29,22 @@ export function drawCasePrize(items, drawRandom = randomInt) {
   if (!total) return null;
   let draw = drawRandom(total);
   return items.find(item => (draw -= item.weight) < 0);
+}
+
+export function drawCaseOutcome(items, drawRandom = randomInt) {
+  const ordinary = items.filter(item => !item.superPrize);
+  const superPrizes = items.filter(item => item.superPrize);
+  if (!ordinary.length && !superPrizes.length) return null;
+  const chestRound = superPrizes.length && (!ordinary.length || drawRandom(1000) < SUPER_CHEST_CHANCE * 1000);
+  return chestRound
+    ? { phase: 'chests', prize: drawCasePrize(superPrizes, drawRandom) }
+    : { phase: 'reward', prize: drawCasePrize(ordinary, drawRandom) };
+}
+
+export function createChestRound(prize, drawRandom = randomInt) {
+  const position = drawRandom(3);
+  const first = drawRandom(MINI_PRIZES.length);
+  const secondDraw = drawRandom(MINI_PRIZES.length - 1);
+  const second = secondDraw >= first ? secondDraw + 1 : secondDraw;
+  return { position, prize: { id: prize.id, name: prize.name }, miniPrizes: [MINI_PRIZES[first], MINI_PRIZES[second]] };
 }

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CASE_COST, casePool, drawCasePrize } from '../case.js';
+import { CASE_COST, MINI_PRIZES, SUPER_CHEST_CHANCE, casePool, drawCasePrize, drawCaseOutcome, createChestRound } from '../case.js';
 
 const shop = [
   { id: 'cheap', name: 'Обед', cost: 1, enabled: true, superPrize: false },
@@ -26,4 +26,20 @@ test('sold-out and disabled prizes cannot be drawn', () => {
   const items = casePool(shop, [{ prize_id: 'rare', purchased: 5, limit_count: 5 }]);
   assert.deepEqual(items.map(item => item.id), ['cheap', 'standard']);
   assert.equal(drawCasePrize([], () => 0), null);
+});
+
+test('ten percent of eligible case openings enter the chest round', () => {
+  const items = casePool(shop, [{ prize_id: 'rare', purchased: 0, limit_count: 5 }]);
+  assert.equal(SUPER_CHEST_CHANCE, 0.10);
+  assert.equal(drawCaseOutcome(items, max => max === 1000 ? 99 : 0).phase, 'chests');
+  assert.equal(drawCaseOutcome(items, max => max === 1000 ? 100 : 0).phase, 'reward');
+  assert.equal(drawCaseOutcome(casePool(shop, [{ prize_id: 'rare', purchased: 5, limit_count: 5 }]), () => 0).phase, 'reward');
+});
+
+test('a chest round has one super prize and two distinct mini prizes', () => {
+  assert.ok(MINI_PRIZES.length >= 8);
+  const round = createChestRound({ id: 'rare', name: 'Выходной' }, max => max - 1);
+  assert.equal(round.position, 2);
+  assert.equal(round.prize.id, 'rare');
+  assert.equal(new Set(round.miniPrizes.map(item => item.id)).size, 2);
 });
