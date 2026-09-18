@@ -20,6 +20,8 @@ test('public rating CSV maps monthly revenue to the correct team and manager', (
 test('CSV quoting and ambiguous names never assign someone else’s revenue', () => {
   assert.deepEqual(parseCsv('A,B\n"Иванов, Иван",100\n'), [['A', 'B'], ['Иванов, Иван', '100']]);
   assert.equal(parseRevenue('2 061 884'), 2061884);
+  assert.equal(parseRevenue('0,29'), 0.29);
+  assert.equal(parseRevenue('1 234,56'), 1234.56);
   assert.equal(parseRevenue('нет данных'), null);
   const groups = { 'Фоменко Александр': [{ name: 'Иванова Ольга', revenue: 100 }, { name: 'Петрова Ольга', revenue: 200 }] };
   assert.equal(revenueForPlayer(groups, 'fomenko', 'Ольга'), null);

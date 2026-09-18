@@ -4,6 +4,7 @@ import { createHmac, createHash, randomUUID, timingSafeEqual } from 'node:crypto
 import { isDeepStrictEqual } from 'node:util';
 import { CASE_COST, MINI_PRIZES, SUPER_CHEST_CHANCE, casePool, drawCaseOutcome, createChestRound } from './case.js';
 import { getRevenueSnapshot, revenueForPlayer, revenueForTeam } from './revenue.js';
+import { publicUpdateValid } from './game-integrity.js';
 
 const { Pool } = pg;
 const app = express();
@@ -633,6 +634,10 @@ app.post('/api/game-state', async (req, res) => {
     if (!isAdmin(req) && (!current.rows.length || protectedChange(before, req.body))) {
       await client.query('ROLLBACK');
       return res.status(403).json({ error: 'Изменять настройки, историю и челленджи может только руководитель группы.' });
+    }
+    if (!isAdmin(req) && !publicUpdateValid(before, req.body)) {
+      await client.query('ROLLBACK');
+      return res.status(422).json({ error: 'Игровые шаги, монетки и награды не совпадают с выполненными действиями.' });
     }
     if (!Array.isArray(req.body?.players) || req.body.players.some(player => player?.avatar !== undefined &&
         (typeof player.avatar !== 'string' || player.avatar.length > 300000 ||

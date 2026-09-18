@@ -47,7 +47,8 @@ export function parseRevenue(value) {
   const clean = String(value || '').replace(/[\s\u00a0\u202f₽]/g, '').replace(',', '.');
   if (!/^-?\d+(?:\.\d{1,2})?$/.test(clean)) return null;
   const amount = Number(clean);
-  return Number.isSafeInteger(amount * 100) ? amount : null;
+  const cents = Math.round(amount * 100);
+  return Number.isSafeInteger(cents) ? cents / 100 : null;
 }
 
 export function revenueFromCsv(csv) {

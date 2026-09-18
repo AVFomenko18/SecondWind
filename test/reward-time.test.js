@@ -32,7 +32,7 @@ test('marking a reward delivered records time and returning it clears that time'
   const reward = { playerId: 'player-1', title: 'Обед', claimed: false, cancelled: false };
   const context = {
     state: { players: [{ id: 'player-1', name: 'Саша' }], rewards: [reward] },
-    writable: () => true, snapshot: () => {}, log: () => {}, commit: () => {}
+    adminWrite: () => true, snapshot: () => {}, log: () => {}, commit: () => {}
   };
   vm.createContext(context);
   vm.runInContext(page.slice(start, end), context);
@@ -42,4 +42,7 @@ test('marking a reward delivered records time and returning it clears that time'
   context.claim(0);
   assert.equal(reward.claimed, false);
   assert.equal(Object.hasOwn(reward, 'claimedAt'), false);
+  context.adminWrite = () => false;
+  context.claim(0);
+  assert.equal(reward.claimed, false);
 });
