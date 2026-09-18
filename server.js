@@ -34,7 +34,7 @@ function validShop(shop) {
     typeof item.superPrize === 'boolean' && Number.isSafeInteger(item.stockLimit) && item.stockLimit >= 1 && item.stockLimit <= 10000);
 }
 const DEFAULT_RULES = Object.freeze({ cashUnit: 50000, crossSteps: 1, actions: [], challenges: [
-  { id: 'challenge-1', name: 'Личный рекорд', description: 'Превысить свой лучший дневной результат по кассе. Предложение — согласуйте критерий до старта.', medals: 1, enabled: false },
+  { id: 'challenge-1', name: 'Личный рекорд', description: 'Превысить свой лучший дневной результат по количеству оплат. Предложение — согласуйте критерий до старта.', medals: 1, enabled: false },
   { id: 'challenge-2', name: 'Командный ассист', description: 'Помочь коллеге довести сложную сделку до оплаты. Предложение — согласуйте критерий до старта.', medals: 1, enabled: false },
   { id: 'challenge-3', name: 'Большой рывок', description: 'Выполнить особую цель периода, заранее согласованную с ведущим.', medals: 2, enabled: false }
 ] });
@@ -266,6 +266,13 @@ function ensureTable() {
         rulesResult = await pool.query('SELECT data FROM department_rules WHERE id = 1');
       }
       if (!validRules(rulesResult.rows[0]?.data)) throw new Error('INVALID_DEPARTMENT_RULES');
+      const currentRules = rulesResult.rows[0].data;
+      const oldChallengeText = 'Превысить свой лучший дневной результат по кассе. Предложение — согласуйте критерий до старта.';
+      const defaultChallenge = currentRules.challenges.find(item => item.id === 'challenge-1');
+      if (defaultChallenge?.description === oldChallengeText) {
+        defaultChallenge.description = 'Превысить свой лучший дневной результат по количеству оплат. Предложение — согласуйте критерий до старта.';
+        await pool.query('UPDATE department_rules SET data = $1::jsonb WHERE id = 1', [JSON.stringify(currentRules)]);
+      }
       const existingShop = await pool.query(`SELECT data #> '{config,shop}' AS shop FROM game_state WHERE jsonb_typeof(data #> '{config,shop}') = 'array' ORDER BY id LIMIT 1`);
       await pool.query('INSERT INTO department_shop (id, data) VALUES (1, $1::jsonb) ON CONFLICT DO NOTHING', [JSON.stringify(completeShop(existingShop.rows[0]?.shop))]);
       const catalogResult = await pool.query('SELECT data FROM department_shop WHERE id = 1');
@@ -746,6 +753,15 @@ function nonnegativeNumber(value) {
   return Number.isFinite(value) && value > 0 ? value : 0;
 }
 
+function paymentCount(player, logs) {
+  const counts = player?.actionCounts || {};
+  const quick = ['payment-low', 'payment-mid', 'payment-high']
+    .reduce((sum, key) => sum + nonnegativeNumber(counts[key]), 0);
+  const legacy = (Array.isArray(logs) ? logs : []).filter(entry =>
+    typeof entry?.text === 'string' && entry.text.startsWith(`${player.name}: новая оплата `)).length;
+  return quick + legacy;
+}
+
 function stepsFromHistory(player, logs) {
   if (!Array.isArray(logs)) return nonnegativeNumber(player.high);
   const joinedAt = logs.findIndex(entry => entry?.text === `${player.name} присоединяется к игре`);
@@ -775,16 +791,16 @@ app.get('/api/department', async (req, res) => {
         id: String(player.id ?? ''),
         name: String(player.name ?? 'Участник'),
         steps: stepsFromHistory(player, game.logs),
-        revenue: nonnegativeNumber(player.cash),
+        payments: paymentCount(player, game.logs),
         laps: Math.floor(nonnegativeNumber(player.high) / 60),
         calls: nonnegativeNumber(player.calls),
         crossSales: nonnegativeNumber(player.cross),
         coins: ledger.reduce((sum, item) => sum + (item?.playerId === player.id && ['milestone', 'challenge', 'manual'].includes(item?.source) ? nonnegativeNumber(item.amount) : 0), 0)
       }));
       const totals = players.reduce((sum, player) => {
-        for (const key of ['steps', 'revenue', 'laps', 'calls', 'crossSales', 'coins']) sum[key] += player[key];
+        for (const key of ['steps', 'payments', 'laps', 'calls', 'crossSales', 'coins']) sum[key] += player[key];
         return sum;
-      }, { steps: 0, revenue: 0, laps: 0, calls: 0, crossSales: 0, coins: 0 });
+      }, { steps: 0, payments: 0, laps: 0, calls: 0, crossSales: 0, coins: 0 });
       return { key, name: teamNames[key], players, totals, saved: Boolean(row), updatedAt: game.updated ?? row?.updated_at ?? null };
     });
     res.json({ teams });
