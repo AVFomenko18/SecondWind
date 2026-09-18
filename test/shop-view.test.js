@@ -31,7 +31,7 @@ test('shop shows a prize wheel without percentage odds or a case refund', () => 
   assert.doesNotMatch(view, /buyPrize/);
 });
 
-test('the wheel has every ordinary prize and three super prize sectors', () => {
+test('the wheel has every ordinary prize, three souvenir and three super prize sectors', () => {
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   const start = html.indexOf('function caseWheelEntries(items){');
   const end = html.indexOf('function rewardDateTime(value){', start);
@@ -44,8 +44,10 @@ test('the wheel has every ordinary prize and three super prize sectors', () => {
   const options = [...ordinary, ...superPrizes];
   const segments = context.caseWheelEntries(options);
   assert.equal(segments.filter(item => item.chestSector).length, 3);
-  assert.deepEqual(Array.from(segments.filter(item => !item.chestSector).map(item => item.id)), ['a', 'b']);
+  assert.equal(segments.filter(item => item.souvenirSector).length, 3);
+  assert.deepEqual(Array.from(segments.filter(item => !item.chestSector && !item.souvenirSector).map(item => item.id)), ['a', 'b']);
   assert.match(context.caseWheelView(options), /Супер-приз/);
+  assert.match(context.caseWheelView(options), /Сувенир/);
 });
 
 test('public case catalog does not return probability weights', () => {

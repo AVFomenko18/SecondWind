@@ -474,7 +474,8 @@ app.post('/api/open-case', async (req, res) => {
       next.pendingCase = { requestId, playerId, at };
     } else {
       reward = { id: requestId, playerId, prizeId: prize.id, title: prize.name, cost: CASE_COST,
-        source: 'shop', superPrize: false, case: true, claimed: false, cancelled: false, at };
+        source: 'shop', superPrize: false, miniPrize: Boolean(outcome.souvenir), souvenir: Boolean(outcome.souvenir),
+        case: true, claimed: false, cancelled: false, at };
       next.rewards.push(reward);
     }
     next.ledger.push({ id: randomUUID(), playerId, amount: -CASE_COST, source: 'purchase', ref: requestId,

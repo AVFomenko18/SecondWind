@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CASE_COST, MINI_PRIZES, SUPER_CHEST_CHANCE, casePool, drawCasePrize, drawCaseOutcome, createChestRound } from '../case.js';
+import { CASE_COST, MINI_PRIZES, SOUVENIR_SECTORS, SUPER_CHEST_CHANCE, casePool, drawCasePrize, drawCaseOutcome, createChestRound } from '../case.js';
 
 const shop = [
   { id: 'cheap', name: 'Обед', cost: 1, enabled: true, superPrize: false },
@@ -42,4 +42,17 @@ test('a chest round has one super prize and two distinct mini prizes', () => {
   assert.equal(round.position, 2);
   assert.equal(round.prize.id, 'rare');
   assert.equal(new Set(round.miniPrizes.map(item => item.id)).size, 2);
+});
+
+test('three souvenir sectors award a random souvenir without changing super chest odds', () => {
+  const items = casePool(shop, [{ prize_id: 'rare', purchased: 0, limit_count: 5 }]);
+  assert.equal(SOUVENIR_SECTORS, 3);
+  const picks = [500, 3600, 0];
+  const first = drawCaseOutcome(items, () => picks.shift());
+  assert.equal(first.phase, 'reward');
+  assert.equal(first.souvenir, true);
+  assert.equal(first.prize.id, MINI_PRIZES[0].id);
+  const secondPicks = [500, 3600, MINI_PRIZES.length - 1];
+  const second = drawCaseOutcome(items, () => secondPicks.shift());
+  assert.equal(second.prize.id, MINI_PRIZES.at(-1).id);
 });
