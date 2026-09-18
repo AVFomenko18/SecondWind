@@ -11,7 +11,30 @@ const NEW_SHOP_PRIZES = Object.freeze([
   { id: 'prize-21', name: 'Забрать оплату у робота Алёши · до 50 000 ₽', cost: 7, enabled: true },
   { id: 'prize-22', name: 'Индивидуальная гифка с менеджером', cost: 2, enabled: true }
 ]);
-const SUPER_PRIZE_LIMITS = Object.freeze({ 'prize-8': 5, 'prize-9': 5, 'prize-20': 5, 'prize-21': 5 });
+const INITIAL_SUPER_PRIZE_LIMITS = Object.freeze({ 'prize-8': 5, 'prize-9': 5, 'prize-20': 5, 'prize-21': 5 });
+const DEFAULT_SHOP_NAMES = ['Начать день на час позже', 'Закончить день на час раньше', 'Обед 1,5 часа', 'День без встреч', 'День без отчётов', 'Несгораемый день', 'Отказаться от 3 лидов', '+5 курсов в распределение', 'Сертификат 1 000 ₽', 'Кино от босса'];
+const DEFAULT_SHOP_COSTS = [2, 2, 1, 3, 2, 3, 2, 3, 4, 2];
+const DEFAULT_SHOP = DEFAULT_SHOP_NAMES.map((name, index) => ({ id: `prize-${index}`, name, cost: DEFAULT_SHOP_COSTS[index], enabled: true })).concat(NEW_SHOP_PRIZES);
+function completeShop(items) {
+  const shop = Array.isArray(items) ? items.filter(item => item.id !== 'prize-10').map(item => ({ ...item })) : DEFAULT_SHOP.map(item => ({ ...item }));
+  for (const item of shop) if (item.id === 'prize-9' && item.name === 'Обед от босса') item.name = 'Кино от босса';
+  for (const prize of NEW_SHOP_PRIZES) if (!shop.some(item => item.id === prize.id)) shop.push({ ...prize });
+  return shop.map(item => ({ ...item,
+    superPrize: typeof item.superPrize === 'boolean' ? item.superPrize : Object.hasOwn(INITIAL_SUPER_PRIZE_LIMITS, item.id),
+    stockLimit: Number.isSafeInteger(item.stockLimit) && item.stockLimit > 0 ? item.stockLimit : (INITIAL_SUPER_PRIZE_LIMITS[item.id] || 5)
+  }));
+}
+function validShop(shop) {
+  return Array.isArray(shop) && shop.length > 0 && shop.length <= 50 && new Set(shop.map(item => item.id)).size === shop.length && shop.every(item =>
+    item && typeof item.id === 'string' && /^[a-z0-9]+(?:-[a-z0-9]+)+$/i.test(item.id) && item.id.length <= 80 &&
+    typeof item.name === 'string' && item.name.trim().length > 0 && item.name.length <= 200 &&
+    Number.isSafeInteger(item.cost) && item.cost >= 1 && item.cost <= 10000 && typeof item.enabled === 'boolean' &&
+    typeof item.superPrize === 'boolean' && Number.isSafeInteger(item.stockLimit) && item.stockLimit >= 1 && item.stockLimit <= 10000);
+}
+function withShop(data, shop) {
+  if (!data?.config) return data;
+  return { ...data, config: { ...data.config, shop } };
+}
 
 app.use(express.json({ limit: '30mb' }));
 app.use(express.static('.'));
@@ -93,18 +116,21 @@ function stateETag(data) {
   return `"${createHash('sha256').update(canonicalJson(data)).digest('hex')}"`;
 }
 
-function inventoryChanges(before, after) {
+function countedReward(reward) {
+  return reward?.superPrize === true || (reward?.superPrize === undefined && Object.hasOwn(INITIAL_SUPER_PRIZE_LIMITS, reward?.prizeId));
+}
+function inventoryChanges(before, after, ids) {
   const changes = {};
   // A period switch or restoration changes the state id. Historical purchases
   // have already been counted and must not be counted again or returned.
   if (before?.id && before.id !== after?.id) {
-    return Object.fromEntries(Object.keys(SUPER_PRIZE_LIMITS).map(id => [id, 0]));
+    return Object.fromEntries(ids.map(id => [id, 0]));
   }
-  for (const id of Object.keys(SUPER_PRIZE_LIMITS)) {
+  for (const id of ids) {
     const previous = new Map((Array.isArray(before?.rewards) ? before.rewards : [])
-      .filter(reward => reward?.prizeId === id).map(reward => [reward.id, reward]));
+      .filter(reward => reward?.prizeId === id && countedReward(reward)).map(reward => [reward.id, reward]));
     const next = new Map((Array.isArray(after?.rewards) ? after.rewards : [])
-      .filter(reward => reward?.prizeId === id).map(reward => [reward.id, reward]));
+      .filter(reward => reward?.prizeId === id && countedReward(reward)).map(reward => [reward.id, reward]));
     let change = 0;
     for (const [rewardId, reward] of next) {
       const old = previous.get(rewardId);
@@ -154,20 +180,32 @@ function ensureTable() {
       await pool.query(`
         CREATE TABLE IF NOT EXISTS super_prize_inventory (
           prize_id text PRIMARY KEY,
-          purchased integer NOT NULL DEFAULT 0 CHECK (purchased >= 0)
+          purchased integer NOT NULL DEFAULT 0 CHECK (purchased >= 0),
+          limit_count integer NOT NULL DEFAULT 5 CHECK (limit_count > 0)
         )
       `);
-      for (const id of Object.keys(SUPER_PRIZE_LIMITS)) {
+      await pool.query('ALTER TABLE super_prize_inventory ADD COLUMN IF NOT EXISTS limit_count integer NOT NULL DEFAULT 5');
+      await pool.query(`CREATE TABLE IF NOT EXISTS department_shop (id integer PRIMARY KEY CHECK (id = 1), data jsonb NOT NULL)`);
+      const existingShop = await pool.query(`SELECT data #> '{config,shop}' AS shop FROM game_state WHERE jsonb_typeof(data #> '{config,shop}') = 'array' ORDER BY id LIMIT 1`);
+      await pool.query('INSERT INTO department_shop (id, data) VALUES (1, $1::jsonb) ON CONFLICT DO NOTHING', [JSON.stringify(completeShop(existingShop.rows[0]?.shop))]);
+      const catalogResult = await pool.query('SELECT data FROM department_shop WHERE id = 1');
+      const catalog = completeShop(catalogResult.rows[0].data);
+      if (!validShop(catalog)) throw new Error('INVALID_SHOP_CATALOG');
+      await pool.query('UPDATE department_shop SET data = $1::jsonb WHERE id = 1', [JSON.stringify(catalog)]);
+      for (const item of catalog.filter(item => item.superPrize)) {
+        const id = item.id;
         await pool.query(`
-          INSERT INTO super_prize_inventory (prize_id, purchased)
-          SELECT $1, LEAST($2::integer, COUNT(*)::integer)
+          INSERT INTO super_prize_inventory (prize_id, purchased, limit_count)
+          SELECT $1, COUNT(*)::integer, $2
           FROM game_state
           CROSS JOIN LATERAL jsonb_array_elements(
             CASE WHEN jsonb_typeof(data->'rewards') = 'array' THEN data->'rewards' ELSE '[]'::jsonb END
           ) AS reward(item)
           WHERE reward.item->>'prizeId' = $1 AND reward.item->>'cancelled' IS DISTINCT FROM 'true'
-          ON CONFLICT DO NOTHING
-        `, [id, SUPER_PRIZE_LIMITS[id]]);
+            AND (reward.item->>'superPrize' = 'true' OR ($3::boolean AND reward.item->>'superPrize' IS NULL))
+          ON CONFLICT (prize_id) DO UPDATE
+          SET purchased = GREATEST(super_prize_inventory.purchased, EXCLUDED.purchased)
+        `, [id, item.stockLimit, Object.hasOwn(INITIAL_SUPER_PRIZE_LIMITS, id)]);
       }
       for (const prize of NEW_SHOP_PRIZES) {
         await pool.query(`
@@ -218,8 +256,11 @@ app.get('/api/game-state', async (req, res) => {
   if (id === null) return;
   try {
     await ensureTable();
-    const result = await pool.query('SELECT data FROM game_state WHERE id = $1', [id]);
-    const data = result.rows[0]?.data ?? {};
+    const [result, catalog] = await Promise.all([
+      pool.query('SELECT data FROM game_state WHERE id = $1', [id]),
+      pool.query('SELECT data FROM department_shop WHERE id = 1')
+    ]);
+    const data = withShop(result.rows[0]?.data ?? {}, catalog.rows[0].data);
     res.setHeader('ETag', stateETag(data));
     res.json(data);
   } catch (err) {
@@ -230,11 +271,16 @@ app.get('/api/game-state', async (req, res) => {
 app.get('/api/prize-stock', async (_req, res) => {
   try {
     await ensureTable();
-    const result = await pool.query('SELECT prize_id, purchased FROM super_prize_inventory');
+    const [result, catalog] = await Promise.all([
+      pool.query('SELECT prize_id, purchased, limit_count FROM super_prize_inventory'),
+      pool.query('SELECT data FROM department_shop WHERE id = 1')
+    ]);
+    const shop = catalog.rows[0].data;
     const purchased = Object.fromEntries(result.rows.map(row => [row.prize_id, Number(row.purchased)]));
-    const remaining = Object.fromEntries(Object.entries(SUPER_PRIZE_LIMITS)
+    const limits = Object.fromEntries(shop.filter(item => item.superPrize).map(item => [item.id, item.stockLimit]));
+    const remaining = Object.fromEntries(Object.entries(limits)
       .map(([id, limit]) => [id, Math.max(0, limit - (purchased[id] || 0))]));
-    res.json({ remaining, limits: SUPER_PRIZE_LIMITS });
+    res.json({ remaining, limits, shop });
   } catch (error) {
     databaseError(res, error);
   }
@@ -250,8 +296,10 @@ app.post('/api/game-state', async (req, res) => {
     await ensureTable();
     client = await pool.connect();
     await client.query('BEGIN');
+    const catalogResult = await client.query('SELECT data FROM department_shop WHERE id = 1 FOR UPDATE');
+    const catalog = catalogResult.rows[0].data;
     const current = await client.query('SELECT data FROM game_state WHERE id = $1 FOR UPDATE', [id]);
-    const before = current.rows[0]?.data ?? {};
+    const before = withShop(current.rows[0]?.data ?? {}, catalog);
     if (req.get('if-match') !== stateETag(before)) {
       await client.query('ROLLBACK');
       return res.status(412).json({ error: 'Данные команды изменились в другой вкладке. Обновите страницу.' });
@@ -260,14 +308,48 @@ app.post('/api/game-state', async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(403).json({ error: 'Изменять настройки, историю и челленджи может только руководитель группы.' });
     }
-    for (const [prizeId, change] of Object.entries(inventoryChanges(before, req.body))) {
+    const requestedShop = req.body?.config?.shop;
+    if (!validShop(requestedShop)) {
+      await client.query('ROLLBACK');
+      return res.status(422).json({ error: 'Проверьте названия, цены и лимиты наград в магазине.' });
+    }
+    if (!isDeepStrictEqual(catalog, requestedShop)) {
+      if (!isAdmin(req)) {
+        await client.query('ROLLBACK');
+        return res.status(403).json({ error: 'Менять магазин может только руководитель группы.' });
+      }
+      for (const item of requestedShop.filter(item => item.superPrize)) {
+        await client.query(`
+          INSERT INTO super_prize_inventory (prize_id, purchased, limit_count)
+          VALUES ($1, 0, $2)
+          ON CONFLICT (prize_id) DO UPDATE SET limit_count = EXCLUDED.limit_count
+        `, [item.id, item.stockLimit]);
+      }
+      await client.query('UPDATE department_shop SET data = $1::jsonb WHERE id = 1', [JSON.stringify(requestedShop)]);
+    }
+    const stockRows = await client.query('SELECT prize_id, purchased, limit_count FROM super_prize_inventory FOR UPDATE');
+    const currentSuperIds = new Set(requestedShop.filter(item => item.superPrize).map(item => item.id));
+    const previousRewards = new Map((Array.isArray(before.rewards) ? before.rewards : []).map(reward => [reward.id, reward]));
+    for (const reward of Array.isArray(req.body?.rewards) ? req.body.rewards : []) {
+      const previous = previousRewards.get(reward?.id);
+      if (previous && (previous.prizeId !== reward.prizeId || countedReward(previous) !== countedReward(reward))) {
+        await client.query('ROLLBACK');
+        return res.status(422).json({ error: 'Тип уже купленной награды менять нельзя.' });
+      }
+      if (!previous && reward?.source === 'shop' && !reward.cancelled && reward.superPrize !== currentSuperIds.has(reward.prizeId)) {
+        await client.query('ROLLBACK');
+        return res.status(422).json({ error: 'Тип покупки не совпадает с настройками магазина.' });
+      }
+    }
+    for (const [prizeId, change] of Object.entries(inventoryChanges(before, req.body, stockRows.rows.map(row => row.prize_id)))) {
       if (!change) continue;
+      const stock = stockRows.rows.find(row => row.prize_id === prizeId);
       const updated = await client.query(`
         UPDATE super_prize_inventory
         SET purchased = purchased + $2
-        WHERE prize_id = $1 AND purchased + $2 BETWEEN 0 AND $3
+        WHERE prize_id = $1 AND purchased + $2 >= 0 AND ($2 < 0 OR purchased + $2 <= $3)
         RETURNING purchased
-      `, [prizeId, change, SUPER_PRIZE_LIMITS[prizeId]]);
+      `, [prizeId, change, stock.limit_count]);
       if (!updated.rows.length) {
         await client.query('ROLLBACK');
         return res.status(409).json({ code: 'SUPER_PRIZE_SOLD_OUT', error: 'Супер-приз уже разобрали. Обновите страницу и выберите другую награду.' });
