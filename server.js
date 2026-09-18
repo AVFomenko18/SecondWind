@@ -2,7 +2,7 @@ import express from 'express';
 import pg from 'pg';
 import { createHmac, createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
-import { CASE_COST, MINI_PRIZES, casePool, drawCaseOutcome, createChestRound } from './case.js';
+import { CASE_COST, MINI_PRIZES, SUPER_CHEST_CHANCE, casePool, drawCaseOutcome, createChestRound } from './case.js';
 import { getRevenueSnapshot, revenueForPlayer, revenueForTeam } from './revenue.js';
 
 const { Pool } = pg;
@@ -398,7 +398,7 @@ app.get('/api/case-catalog', async (_req, res) => {
     ]);
     const items = casePool(catalog.rows[0].data, inventory.rows);
     res.setHeader('Cache-Control', 'no-store');
-    res.json({ cost: CASE_COST, superChestChance: 10, miniPrizes: MINI_PRIZES,
+    res.json({ cost: CASE_COST, superChestChance: SUPER_CHEST_CHANCE * 100, miniPrizes: MINI_PRIZES,
       items: items.map(({ id, name, cost, superPrize, remaining }) =>
         ({ id, name, cost, superPrize, remaining })) });
   } catch (error) {

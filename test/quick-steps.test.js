@@ -23,26 +23,26 @@ function setup() {
   return { context, player, messages, animations };
 }
 
-test('quick buttons credit half, one, and two steps without inventing cash amounts', () => {
+test('quick buttons credit calibrated steps without inventing cash amounts or direct coins', () => {
   const { context, player, animations } = setup();
   context.creditQuickStep('cashLow');
   context.creditQuickStep('cashMid');
   context.creditQuickStep('cashHigh');
-  assert.equal(player.bank, 3.5);
+  assert.equal(player.bank, 5);
   assert.equal(player.cash, 0);
   assert.equal(player.actionCounts['payment-low'], 1);
   assert.equal(player.actionCounts['payment-mid'], 1);
   assert.equal(player.actionCounts['payment-high'], 1);
-  assert.deepEqual(animations.map(item => item.amount), [0.5, 1, 2]);
+  assert.deepEqual(animations.map(item => item.amount), [0.5, 1.5, 3]);
 });
 
-test('activity is once a day; cross-sale and three calls credit one step each', () => {
+test('activity is once a day; cross-sale and three calls credit calibrated steps', () => {
   const { context, player, messages } = setup();
   context.creditQuickStep('activity');
   context.creditQuickStep('activity');
   context.creditQuickStep('cross');
   context.creditQuickStep('powerCalls');
-  assert.equal(player.bank, 4);
+  assert.equal(player.bank, 7.5);
   assert.equal(player.actionCounts['activity-2026-09-18'], 70);
   assert.equal(player.cross, 1);
   assert.equal(player.calls, 3);
@@ -65,6 +65,9 @@ test('game field shows six direct buttons instead of amount inputs', () => {
   assert.match(view, /🤝/);
   assert.match(view, /☎️/);
   assert.match(view, /0,5 шага/);
+  assert.match(view, /1,5 шага/);
+  assert.match(view, /3 шага/);
+  assert.match(view, /5 шагов/);
   assert.doesNotMatch(view, /👟|Всего оплат|учтено дней|Всего кросс-сейлов|Дополнительные действия/);
   assert.doesNotMatch(view, /type="number"/);
 });

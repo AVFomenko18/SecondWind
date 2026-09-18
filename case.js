@@ -1,9 +1,8 @@
 import { randomInt } from 'node:crypto';
 
 export const CASE_COST = 2;
-export const SUPER_CHEST_CHANCE = 0.10;
+export const SUPER_CHEST_CHANCE = 0.02;
 export const SOUVENIR_SECTORS = 3;
-const SOUVENIR_WEIGHT = 500;
 export const MINI_PRIZES = Object.freeze([
   { id: 'mini-bank-charm', name: 'Оберег от отказов банка', icon: '🧿' },
   { id: 'mini-garlic', name: 'Золотой чеснок с логотипом Т-Банка', icon: '🧄' },
@@ -39,8 +38,10 @@ export function drawCaseOutcome(items, drawRandom = randomInt) {
   if (!ordinary.length && !superPrizes.length) return null;
   const chestRound = superPrizes.length && drawRandom(1000) < SUPER_CHEST_CHANCE * 1000;
   if (chestRound) return { phase: 'chests', prize: drawCasePrize(superPrizes, drawRandom) };
+  const ordinaryWeight = ordinary.reduce((sum, item) => sum + item.weight, 0);
+  const souvenirWeight = ordinaryWeight ? ordinaryWeight * 4 : SOUVENIR_SECTORS;
   const souvenirSectors = Array.from({ length: SOUVENIR_SECTORS }, (_, index) =>
-    ({ id: `souvenir-sector-${index}`, weight: SOUVENIR_WEIGHT, souvenirSector: true }));
+    ({ id: `souvenir-sector-${index}`, weight: Math.floor(souvenirWeight / SOUVENIR_SECTORS) + (index < souvenirWeight % SOUVENIR_SECTORS ? 1 : 0), souvenirSector: true }));
   const drawn = drawCasePrize([...ordinary, ...souvenirSectors], drawRandom);
   return drawn.souvenirSector
     ? { phase: 'reward', prize: MINI_PRIZES[drawRandom(MINI_PRIZES.length)], souvenir: true }

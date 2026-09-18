@@ -28,11 +28,11 @@ test('sold-out and disabled prizes cannot be drawn', () => {
   assert.equal(drawCasePrize([], () => 0), null);
 });
 
-test('ten percent of eligible case openings enter the chest round', () => {
+test('two percent of eligible case openings enter the chest round', () => {
   const items = casePool(shop, [{ prize_id: 'rare', purchased: 0, limit_count: 5 }]);
-  assert.equal(SUPER_CHEST_CHANCE, 0.10);
-  assert.equal(drawCaseOutcome(items, max => max === 1000 ? 99 : 0).phase, 'chests');
-  assert.equal(drawCaseOutcome(items, max => max === 1000 ? 100 : 0).phase, 'reward');
+  assert.equal(SUPER_CHEST_CHANCE, 0.02);
+  assert.equal(drawCaseOutcome(items, max => max === 1000 ? 19 : 0).phase, 'chests');
+  assert.equal(drawCaseOutcome(items, max => max === 1000 ? 20 : 0).phase, 'reward');
   assert.equal(drawCaseOutcome(casePool(shop, [{ prize_id: 'rare', purchased: 5, limit_count: 5 }]), () => 0).phase, 'reward');
 });
 
@@ -55,4 +55,19 @@ test('three souvenir sectors award a random souvenir without changing super ches
   const secondPicks = [500, 3600, MINI_PRIZES.length - 1];
   const second = drawCaseOutcome(items, () => secondPicks.shift());
   assert.equal(second.prize.id, MINI_PRIZES.at(-1).id);
+});
+
+test('souvenirs occupy eighty percent of non-chest outcomes as the ordinary catalog changes', () => {
+  const ordinary = [{ id: 'cheap', cost: 1, enabled: true, superPrize: false },
+    { id: 'standard', cost: 2, enabled: true, superPrize: false }];
+  for (const catalog of [ordinary.slice(0, 1), ordinary]) {
+    const items = casePool(catalog, []);
+    const regularWeight = items.reduce((sum, item) => sum + item.weight, 0);
+    let souvenirs = 0;
+    for (let draw = 0; draw < regularWeight * 5; draw++) {
+      const outcome = drawCaseOutcome(items, max => max === regularWeight * 5 ? draw : 0);
+      if (outcome.souvenir) souvenirs++;
+    }
+    assert.equal(souvenirs, regularWeight * 4);
+  }
 });
