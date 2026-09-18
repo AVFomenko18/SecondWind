@@ -10,7 +10,7 @@ test('shop sells a case without showing percentage odds or offering a refund', (
   assert.ok(start >= 0 && end > start);
   const player = { id: 'player-1', name: 'Оля' };
   const context = {
-    state: { players: [player], rewards: [{ playerId: player.id, title: 'Приз', cost: 2, source: 'shop', case: true, claimed: false, cancelled: false }] },
+    state: { players: [player], rewards: [{ playerId: player.id, title: 'Приз', cost: 2, source: 'shop', case: true, claimed: false, cancelled: false, at: '2026-09-18T10:28:00.000Z' }] },
     pnow: () => player, medals: () => 3, playerSelect: () => '<select></select>', esc: value => String(value),
     caseCatalog: { cost: 2, items: [{ id: 'prize-0', name: 'Простой приз', cost: 1, superPrize: false },
       { id: 'prize-20', name: 'Редкий приз', cost: 7, superPrize: true, remaining: 3 }] },
