@@ -6,7 +6,7 @@ import vm from 'node:vm';
 test('department leaderboard counts runs longer than six steps', () => {
   const server = readFileSync(new URL('../server.js', import.meta.url), 'utf8');
   const start = server.indexOf('function nonnegativeNumber(value) {');
-  const end = server.indexOf("\napp.get('/api/department'", start);
+  const end = server.indexOf("\napp.get('/api/revenue'", start);
   assert.ok(start >= 0 && end > start);
   const context = {};
   vm.createContext(context);
@@ -23,7 +23,7 @@ test('department leaderboard counts runs longer than six steps', () => {
 test('department counts all payment buttons and previous recorded payments', () => {
   const server = readFileSync(new URL('../server.js', import.meta.url), 'utf8');
   const start = server.indexOf('function nonnegativeNumber(value) {');
-  const end = server.indexOf("\napp.get('/api/department'", start);
+  const end = server.indexOf("\napp.get('/api/revenue'", start);
   const context = {};
   vm.createContext(context);
   vm.runInContext(server.slice(start, end), context);
@@ -32,5 +32,6 @@ test('department counts all payment buttons and previous recorded payments', () 
   assert.equal(context.paymentCount(player, logs), 7);
   const department = readFileSync(new URL('../department.html', import.meta.url), 'utf8');
   assert.match(department, /key:'payments',label:'Оплаты'/);
-  assert.doesNotMatch(department, /revenue|Выручка/);
+  assert.match(department, /key:'revenue',label:'Выручка'/);
+  assert.match(department, /Выручка месяца/);
 });

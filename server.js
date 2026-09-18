@@ -3,6 +3,7 @@ import pg from 'pg';
 import { createHmac, createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { CASE_COST, MINI_PRIZES, casePool, drawCaseOutcome, createChestRound } from './case.js';
+import { getRevenueSnapshot, revenueForPlayer, revenueForTeam } from './revenue.js';
 
 const { Pool } = pg;
 const app = express();
@@ -779,10 +780,35 @@ function stepsFromHistory(player, logs) {
   return steps || (joinedAt < 0 ? nonnegativeNumber(player.high) : 0);
 }
 
+app.get('/api/revenue', async (req, res) => {
+  const id = teamId(req, res);
+  if (id === null) return;
+  try {
+    await ensureTable();
+    const [snapshot, result] = await Promise.all([
+      getRevenueSnapshot(),
+      pool.query('SELECT data FROM game_state WHERE id = $1', [id])
+    ]);
+    const teamKey = req.query.team || 'fomenko';
+    const players = {};
+    if (snapshot) for (const player of result.rows[0]?.data?.players || []) {
+      players[player.id] = revenueForPlayer(snapshot.groups, teamKey, player.name);
+    }
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ total: snapshot ? revenueForTeam(snapshot.groups, teamKey) : null,
+      players, fetchedAt: snapshot?.fetchedAt || null, stale: snapshot?.stale || false });
+  } catch (error) {
+    databaseError(res, error);
+  }
+});
+
 app.get('/api/department', async (req, res) => {
   try {
     await ensureTable();
-    const result = await pool.query('SELECT id, data, updated_at FROM game_state WHERE id = ANY($1::int[])', [Object.values(teamIds)]);
+    const [result, revenueSnapshot] = await Promise.all([
+      pool.query('SELECT id, data, updated_at FROM game_state WHERE id = ANY($1::int[])', [Object.values(teamIds)]),
+      getRevenueSnapshot()
+    ]);
     const byId = new Map(result.rows.map(row => [Number(row.id), row]));
     const teams = Object.entries(teamIds).map(([key, id]) => {
       const row = byId.get(id);
@@ -793,6 +819,7 @@ app.get('/api/department', async (req, res) => {
         name: String(player.name ?? 'Участник'),
         steps: stepsFromHistory(player, game.logs),
         payments: paymentCount(player, game.logs),
+        revenue: revenueSnapshot ? revenueForPlayer(revenueSnapshot.groups, key, player.name) : null,
         laps: Math.floor(nonnegativeNumber(player.high) / 60),
         calls: nonnegativeNumber(player.calls),
         crossSales: nonnegativeNumber(player.cross),
@@ -802,9 +829,10 @@ app.get('/api/department', async (req, res) => {
         for (const key of ['steps', 'payments', 'laps', 'calls', 'crossSales', 'coins']) sum[key] += player[key];
         return sum;
       }, { steps: 0, payments: 0, laps: 0, calls: 0, crossSales: 0, coins: 0 });
+      totals.revenue = revenueSnapshot ? revenueForTeam(revenueSnapshot.groups, key) : null;
       return { key, name: teamNames[key], players, totals, saved: Boolean(row), updatedAt: game.updated ?? row?.updated_at ?? null };
     });
-    res.json({ teams });
+    res.json({ teams, revenueFetchedAt: revenueSnapshot?.fetchedAt || null, revenueStale: revenueSnapshot?.stale || false });
   } catch (error) {
     databaseError(res, error);
   }
