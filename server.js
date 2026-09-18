@@ -13,11 +13,11 @@ const NEW_SHOP_PRIZES = Object.freeze([
   { id: 'prize-22', name: 'Индивидуальная гифка с менеджером', cost: 2, enabled: true }
 ]);
 const INITIAL_SUPER_PRIZE_LIMITS = Object.freeze({ 'prize-8': 5, 'prize-9': 5, 'prize-20': 5, 'prize-21': 5 });
-const DEFAULT_SHOP_NAMES = ['Начать день на час позже', 'Закончить день на час раньше', 'Обед 1,5 часа', 'День без встреч', 'День без отчётов', 'Несгораемый день', 'Отказаться от 3 лидов', '+5 курсов в распределение', 'Сертификат 1 000 ₽', 'Кино от босса'];
-const DEFAULT_SHOP_COSTS = [2, 2, 1, 3, 2, 3, 2, 3, 4, 2];
-const DEFAULT_SHOP = DEFAULT_SHOP_NAMES.map((name, index) => ({ id: `prize-${index}`, name, cost: DEFAULT_SHOP_COSTS[index], enabled: true })).concat(NEW_SHOP_PRIZES);
+const DEFAULT_SHOP_NAMES = ['Закончить день на час раньше', 'Обед 1,5 часа', 'День без встреч', 'День без отчётов', 'Несгораемый день', 'Отказаться от 3 лидов', '+5 курсов в распределение', 'Сертификат 1 000 ₽', 'Кино от босса'];
+const DEFAULT_SHOP_COSTS = [2, 1, 3, 2, 3, 2, 3, 4, 2];
+const DEFAULT_SHOP = DEFAULT_SHOP_NAMES.map((name, index) => ({ id: `prize-${index + 1}`, name, cost: DEFAULT_SHOP_COSTS[index], enabled: true })).concat(NEW_SHOP_PRIZES);
 function completeShop(items) {
-  const shop = Array.isArray(items) ? items.filter(item => item.id !== 'prize-10').map(item => ({ ...item })) : DEFAULT_SHOP.map(item => ({ ...item }));
+  const shop = Array.isArray(items) ? items.filter(item => !['prize-0', 'prize-10'].includes(item.id)).map(item => ({ ...item })) : DEFAULT_SHOP.map(item => ({ ...item }));
   for (const item of shop) if (item.id === 'prize-9' && item.name === 'Обед от босса') item.name = 'Кино от босса';
   for (const prize of NEW_SHOP_PRIZES) if (!shop.some(item => item.id === prize.id)) shop.push({ ...prize });
   return shop.map(item => ({ ...item,
