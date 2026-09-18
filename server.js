@@ -526,8 +526,9 @@ function stepsFromHistory(player, logs) {
   const steps = currentLogs.reduce((total, entry) => {
     const text = entry?.text;
     if (typeof text !== 'string' || !text.startsWith(prefix)) return total;
-    const match = text.match(/потрачено ([1-6]) шаг\./);
-    return total + (match ? Number(match[1]) : 0);
+    const match = text.match(/потрачено ([1-9]\d*) шаг\./);
+    const count = match ? Number(match[1]) : 0;
+    return total + (Number.isSafeInteger(count) ? count : 0);
   }, 0);
   // Older imported saves might have distance but no detailed move history.
   return steps || (joinedAt < 0 ? nonnegativeNumber(player.high) : 0);
