@@ -34,6 +34,17 @@ test('shop shows a prize wheel without percentage odds or a case refund', () => 
   assert.doesNotMatch(view, /Супер-приз · осталось/);
   assert.doesNotMatch(view, /Вернуть монетки/);
   assert.doesNotMatch(view, /buyPrize/);
+
+  context.state.rewards.unshift({ id: 'mini-1', playerId: player.id, title: 'Зелье оплат в касание',
+    miniPrize: true, cost: 2, source: 'shop', case: true, claimed: false, cancelled: false,
+    at: '2026-09-18T10:29:00.000Z' });
+  const opened = context.prizesView().split('Открытые награды')[1];
+  assert.doesNotMatch(opened, /Зелье оплат в касание/);
+  assert.match(opened, /Приз/);
+  assert.match(opened, /claim\(1\)/);
+
+  context.state.rewards.pop();
+  assert.match(context.prizesView().split('Открытые награды')[1], /Пока нет открытых наград/);
 });
 
 test('the wheel has every ordinary prize, three souvenir and three super prize sectors', () => {
