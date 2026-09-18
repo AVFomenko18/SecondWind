@@ -32,9 +32,63 @@ function validShop(shop) {
     Number.isSafeInteger(item.cost) && item.cost >= 1 && item.cost <= 10000 && typeof item.enabled === 'boolean' &&
     typeof item.superPrize === 'boolean' && Number.isSafeInteger(item.stockLimit) && item.stockLimit >= 1 && item.stockLimit <= 10000);
 }
-function withShop(data, shop) {
+const DEFAULT_RULES = Object.freeze({ cashUnit: 50000, crossSteps: 1, actions: [], challenges: [
+  { id: 'challenge-1', name: 'Личный рекорд', description: 'Превысить свой лучший дневной результат по кассе. Предложение — согласуйте критерий до старта.', medals: 1, enabled: false },
+  { id: 'challenge-2', name: 'Командный ассист', description: 'Помочь коллеге довести сложную сделку до оплаты. Предложение — согласуйте критерий до старта.', medals: 1, enabled: false },
+  { id: 'challenge-3', name: 'Большой рывок', description: 'Выполнить особую цель периода, заранее согласованную с ведущим.', medals: 2, enabled: false }
+] });
+function sharedRules(config) {
+  return { cashUnit: config?.cashUnit, crossSteps: config?.crossSteps,
+    actions: config?.actions, challenges: config?.challenges };
+}
+function validRules(rules) {
+  const validId = id => typeof id === 'string' && id.length <= 80 && /^[a-z0-9]+(?:-[a-z0-9]+)+$/i.test(id);
+  const validName = name => typeof name === 'string' && name.length > 0 && name.length <= 120;
+  const unique = items => items.every(item => item && typeof item === 'object') && new Set(items.map(item => item.id)).size === items.length;
+  return rules && Number.isSafeInteger(rules.cashUnit) && rules.cashUnit >= 1 && rules.cashUnit <= 100000000 &&
+    Number.isSafeInteger(rules.crossSteps) && rules.crossSteps >= 1 && rules.crossSteps <= 100 &&
+    Array.isArray(rules.actions) && rules.actions.length <= 30 && unique(rules.actions) &&
+    rules.actions.every(item => item && validId(item.id) && validName(item.name) &&
+      Number.isSafeInteger(item.unit) && item.unit >= 1 && item.unit <= 1000000 &&
+      Number.isSafeInteger(item.steps) && item.steps >= 1 && item.steps <= 100 && typeof item.enabled === 'boolean') &&
+    Array.isArray(rules.challenges) && rules.challenges.length <= 30 && unique(rules.challenges) &&
+    rules.challenges.every(item => item && validId(item.id) && validName(item.name) &&
+      typeof item.description === 'string' && item.description.length > 0 && item.description.length <= 500 &&
+      Number.isSafeInteger(item.medals) && item.medals >= 1 && item.medals <= 100 && typeof item.enabled === 'boolean');
+}
+function withDepartmentConfig(data, shop, rules) {
   if (!data?.config) return data;
-  return { ...data, config: { ...data.config, shop } };
+  return { ...data, config: { ...data.config, shop, ...rules } };
+}
+function ruleUsage(states) {
+  const challengeIds = new Set(), actionIds = new Set();
+  let economyUsed = false;
+  for (const game of states) {
+    for (const entry of Array.isArray(game?.ledger) ? game.ledger : []) {
+      if (entry?.source === 'challenge' && typeof entry.ref === 'string') challengeIds.add(entry.ref);
+    }
+    for (const player of Array.isArray(game?.players) ? game.players : []) {
+      if (player.cash > (player.cashBase || 0) || player.calls > 0 || player.cross > 0) economyUsed = true;
+      for (const [key, count] of Object.entries(player.actionCounts || {})) {
+        if (count && key.startsWith('action-')) actionIds.add(key);
+        if (count) economyUsed = true;
+      }
+    }
+  }
+  return { economyUsed, challengeIds: [...challengeIds], actionIds: [...actionIds] };
+}
+function changesUsedRules(before, after, usage) {
+  if (usage.economyUsed && (before.cashUnit !== after.cashUnit || before.crossSteps !== after.crossSteps)) return true;
+  for (const [kind, ids, fields] of [
+    ['challenges', usage.challengeIds, ['name', 'description', 'medals']],
+    ['actions', usage.actionIds, ['name', 'unit', 'steps']]
+  ]) {
+    const next = new Map(after[kind].map(item => [item.id, item]));
+    for (const item of before[kind]) {
+      if (ids.includes(item.id) && (!next.has(item.id) || fields.some(field => item[field] !== next.get(item.id)[field]))) return true;
+    }
+  }
+  return false;
 }
 
 app.use(express.json({ limit: '30mb' }));
@@ -190,6 +244,16 @@ function ensureTable() {
       `);
       await pool.query('ALTER TABLE super_prize_inventory ADD COLUMN IF NOT EXISTS limit_count integer NOT NULL DEFAULT 5');
       await pool.query(`CREATE TABLE IF NOT EXISTS department_shop (id integer PRIMARY KEY CHECK (id = 1), data jsonb NOT NULL)`);
+      await pool.query(`CREATE TABLE IF NOT EXISTS department_rules (id integer PRIMARY KEY CHECK (id = 1), data jsonb NOT NULL)`);
+      let rulesResult = await pool.query('SELECT data FROM department_rules WHERE id = 1');
+      if (!rulesResult.rows.length) {
+        const fomenkoRules = await pool.query('SELECT data->\'config\' AS config FROM game_state WHERE id = 1');
+        const initialRules = sharedRules(fomenkoRules.rows[0]?.config ?? DEFAULT_RULES);
+        if (!validRules(initialRules)) throw new Error('INVALID_FOMENKO_RULES');
+        await pool.query('INSERT INTO department_rules (id, data) VALUES (1, $1::jsonb) ON CONFLICT DO NOTHING', [JSON.stringify(initialRules)]);
+        rulesResult = await pool.query('SELECT data FROM department_rules WHERE id = 1');
+      }
+      if (!validRules(rulesResult.rows[0]?.data)) throw new Error('INVALID_DEPARTMENT_RULES');
       const existingShop = await pool.query(`SELECT data #> '{config,shop}' AS shop FROM game_state WHERE jsonb_typeof(data #> '{config,shop}') = 'array' ORDER BY id LIMIT 1`);
       await pool.query('INSERT INTO department_shop (id, data) VALUES (1, $1::jsonb) ON CONFLICT DO NOTHING', [JSON.stringify(completeShop(existingShop.rows[0]?.shop))]);
       const catalogResult = await pool.query('SELECT data FROM department_shop WHERE id = 1');
@@ -260,11 +324,12 @@ app.get('/api/game-state', async (req, res) => {
   if (id === null) return;
   try {
     await ensureTable();
-    const [result, catalog] = await Promise.all([
+    const [result, catalog, rules] = await Promise.all([
       pool.query('SELECT data FROM game_state WHERE id = $1', [id]),
-      pool.query('SELECT data FROM department_shop WHERE id = 1')
+      pool.query('SELECT data FROM department_shop WHERE id = 1'),
+      pool.query('SELECT data FROM department_rules WHERE id = 1')
     ]);
-    const data = withShop(result.rows[0]?.data ?? {}, catalog.rows[0].data);
+    const data = withDepartmentConfig(result.rows[0]?.data ?? {}, catalog.rows[0].data, rules.rows[0].data);
     res.setHeader('ETag', stateETag(data));
     res.json(data);
   } catch (err) {
@@ -285,6 +350,20 @@ app.get('/api/prize-stock', async (_req, res) => {
     const remaining = Object.fromEntries(Object.entries(limits)
       .map(([id, limit]) => [id, Math.max(0, limit - (purchased[id] || 0))]));
     res.json({ remaining, limits, shop });
+  } catch (error) {
+    databaseError(res, error);
+  }
+});
+
+app.get('/api/department-rules', async (_req, res) => {
+  try {
+    await ensureTable();
+    const [result, games] = await Promise.all([
+      pool.query('SELECT data FROM department_rules WHERE id = 1'),
+      pool.query('SELECT data FROM game_state WHERE id = ANY($1::int[])', [Object.values(teamIds)])
+    ]);
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ rules: result.rows[0].data, usage: ruleUsage(games.rows.map(row => row.data)) });
   } catch (error) {
     databaseError(res, error);
   }
@@ -321,8 +400,9 @@ app.post('/api/open-case', async (req, res) => {
     client = await pool.connect();
     await client.query('BEGIN');
     const catalog = (await client.query('SELECT data FROM department_shop WHERE id = 1 FOR UPDATE')).rows[0].data;
+    const rules = (await client.query('SELECT data FROM department_rules WHERE id = 1 FOR UPDATE')).rows[0].data;
     const current = await client.query('SELECT data FROM game_state WHERE id = $1 FOR UPDATE', [id]);
-    const before = withShop(current.rows[0]?.data ?? {}, catalog);
+    const before = withDepartmentConfig(current.rows[0]?.data ?? {}, catalog, rules);
     const existing = before.rewards?.find(reward => reward.id === requestId && reward.playerId === playerId && reward.case === true);
     if (existing) {
       await client.query('COMMIT');
@@ -414,8 +494,10 @@ app.post('/api/game-state', async (req, res) => {
     await client.query('BEGIN');
     const catalogResult = await client.query('SELECT data FROM department_shop WHERE id = 1 FOR UPDATE');
     const catalog = catalogResult.rows[0].data;
+    const rulesResult = await client.query('SELECT data FROM department_rules WHERE id = 1 FOR UPDATE');
+    const rules = rulesResult.rows[0].data;
     const current = await client.query('SELECT data FROM game_state WHERE id = $1 FOR UPDATE', [id]);
-    const before = withShop(current.rows[0]?.data ?? {}, catalog);
+    const before = withDepartmentConfig(current.rows[0]?.data ?? {}, catalog, rules);
     if (req.get('if-match') !== stateETag(before)) {
       await client.query('ROLLBACK');
       return res.status(412).json({ error: 'Данные команды изменились в другой вкладке. Обновите страницу.' });
@@ -428,6 +510,27 @@ app.post('/api/game-state', async (req, res) => {
     if (!validShop(requestedShop)) {
       await client.query('ROLLBACK');
       return res.status(422).json({ error: 'Проверьте названия, цены и лимиты наград в магазине.' });
+    }
+    const requestedRules = sharedRules(req.body?.config);
+    if (!validRules(requestedRules)) {
+      await client.query('ROLLBACK');
+      return res.status(422).json({ error: 'Проверьте общие правила шагов и челленджей.' });
+    }
+    if (!current.rows.length && !isDeepStrictEqual(rules, requestedRules)) {
+      await client.query('ROLLBACK');
+      return res.status(412).json({ error: 'Общие правила отдела изменились. Обновите страницу перед созданием команды.' });
+    }
+    if (!isDeepStrictEqual(rules, requestedRules)) {
+      if (!isAdmin(req)) {
+        await client.query('ROLLBACK');
+        return res.status(403).json({ error: 'Менять общие правила может только руководитель группы.' });
+      }
+      const allGames = await client.query('SELECT data FROM game_state WHERE id = ANY($1::int[])', [Object.values(teamIds)]);
+      if (changesUsedRules(rules, requestedRules, ruleUsage(allGames.rows.map(row => row.data)))) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ error: 'Уже использованные курсы, челленджи и действия нельзя менять для всего отдела. Создайте новое условие.' });
+      }
+      await client.query('UPDATE department_rules SET data = $1::jsonb WHERE id = 1', [JSON.stringify(requestedRules)]);
     }
     if (!isDeepStrictEqual(catalog, requestedShop)) {
       if (!isAdmin(req)) {
