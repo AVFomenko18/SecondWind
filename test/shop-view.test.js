@@ -15,7 +15,8 @@ test('shop shows a prize wheel without percentage odds or a case refund', () => 
     caseCatalog: { cost: 2, miniPrizes: [{ id: 'mini-call-potion', icon: '🧪', name: 'Зелье удачного дозвона' }],
       items: [{ id: 'prize-0', name: 'Простой приз', cost: 1, superPrize: false },
         { id: 'prize-20', name: 'Редкий приз', cost: 7, superPrize: true, remaining: 3 }] },
-    caseLastReward: null, caseCatalogError: '', caseOpening: false, apiReady: true
+    caseLastReward: null, caseCatalogError: '', caseOpening: false, apiReady: true,
+    COIN_ICON: '<img class="coin-icon" src="assets/coin-ruble.svg" alt="монетка">'
   };
   vm.createContext(context);
   vm.runInContext(html.slice(start, end), context);
@@ -23,7 +24,7 @@ test('shop shows a prize wheel without percentage odds or a case refund', () => 
   assert.match(view, /Крутить барабан/);
   assert.match(view, /case-wheel-disk/);
   assert.match(view, /Зелье удачного дозвона/);
-  assert.match(view, /2 🪙 за открытие/);
+  assert.match(view, /2 <img class="coin-icon"[^>]+> за открытие/);
   assert.doesNotMatch(view, /\d+[,.]?\d*%/);
   assert.doesNotMatch(view, /Шансы и доступные награды/);
   assert.match(view, /Осталось <b>3<\/b> штук/);
@@ -118,7 +119,8 @@ test('wheel stays a surprise during the longer spin and celebrates the saved rew
     state: { players: [player], rewards: [reward] }, pnow: () => player, medals: () => 3,
     playerSelect: () => '<select></select>', esc: value => String(value),
     caseCatalog: { cost: 2, items: [{ id: 'prize-20', name: 'Day off', cost: 7, superPrize: true, remaining: 4 }] },
-    caseLastReward: reward, caseCatalogError: '', caseOpening: true, apiReady: true
+    caseLastReward: reward, caseCatalogError: '', caseOpening: true, apiReady: true,
+    COIN_ICON: '<img class="coin-icon" src="assets/coin-ruble.svg" alt="монетка">'
   };
   vm.createContext(context);
   vm.runInContext(html.slice(viewStart, viewEnd), context);

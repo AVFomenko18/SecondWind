@@ -22,7 +22,7 @@ header .header-team-navigation .team-tabs{width:100%;flex:0 0 auto;justify-conte
 .department-link-text{display:flex;flex-direction:column;gap:2px;line-height:1.1}.department-link-text strong{font-size:17px}.department-link-text small{font-size:10px;font-weight:700;letter-spacing:.2px}
 .department-link-arrow{margin-left:9px;font-size:21px;line-height:1}
 @media(max-width:700px){header .header-team-navigation{flex-basis:100%}.department-link{min-height:51px;padding:8px 15px}}
-</style></head>
+</style><style>img.coin-icon{display:inline-block;width:1.1em;height:1.1em;vertical-align:-.16em;object-fit:contain}</style></head>
 <body>
   <header>
     <div class="brand"><span class="logo">⚑</span>Спортивная драма</div>
@@ -71,7 +71,7 @@ header .header-team-navigation .team-tabs{width:100%;flex:0 0 auto;justify-conte
       {key:'steps',label:'Шаги',icon:'🏃',unit:'шаг.'},
       {key:'calls',label:'Звонки',icon:'☎',unit:'звонков'},
       {key:'crossSales',label:'Кросс-сейлы',icon:'🤝',unit:'продаж'},
-      {key:'coins',label:'Монетки',icon:'🪙',unit:'мон.'}
+      {key:'coins',label:'Монетки',icon:'<img class="coin-icon" src="assets/coin-ruble.svg" alt="монетка">',unit:'мон.'}
     ];
     const number=new Intl.NumberFormat('ru-RU');
     const escapeHtml=value=>String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
