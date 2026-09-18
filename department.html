@@ -12,24 +12,33 @@
     .filters{display:flex;gap:7px;flex-wrap:wrap}.filters button{border:1px solid #c8b991;border-radius:8px;padding:8px 12px;background:#fff8e8;color:var(--green);font-weight:700;font-size:12px}.filters button.active{border-color:var(--green);background:var(--green);color:#fff8e4}.rank-layout{display:grid;grid-template-columns:minmax(310px,.8fr) minmax(0,1.6fr);gap:18px}.panel{min-width:0;padding:22px;border:1px solid #d6c6a2;border-radius:12px;background:var(--paper);box-shadow:0 5px 0 #dcd1b7}.panel h3{margin:0 0 16px;font:800 23px Georgia,serif}.team-row{display:grid;grid-template-columns:32px minmax(0,1fr) auto;gap:10px;align-items:center;padding:14px 0;border-top:1px solid #e8dfc9}.team-row:first-of-type{border-top:0}.place{display:grid;place-items:center;width:29px;height:29px;border-radius:50%;background:#e9e3ce;color:var(--green);font-weight:800}.place.first{background:#e4ba51;color:#3b321d}.team-main a{font-weight:800;text-decoration:none}.team-main a:hover{text-decoration:underline}.team-main small{display:block;color:var(--muted);font-size:11px}.bar{height:6px;margin-top:9px;background:#e9e3ce;border-radius:5px;overflow:hidden}.bar i{display:block;height:100%;background:linear-gradient(90deg,#cd7340,#dfb849);border-radius:5px}.team-value{font:700 16px Consolas,monospace;color:var(--green);white-space:nowrap}.table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;text-align:left;min-width:650px}th{padding:8px 8px 12px;color:#697361;font-size:10px;text-transform:uppercase;letter-spacing:.8px;white-space:nowrap}td{padding:11px 8px;border-top:1px solid #e8dfc9;vertical-align:middle;font-size:12px}td.name{font-weight:800;font-size:13px}td.name small{display:block;font-weight:500;color:var(--muted)}td.num{text-align:right;font-family:Consolas,monospace;white-space:nowrap}th.num{text-align:right}td.focus,th.focus{background:#f5ebcc;color:#214834;font-weight:800}tbody tr:first-child td:first-child{color:#b77e22;font-weight:900}.empty-message{padding:24px;color:var(--muted);background:#f4eedb;border:1px dashed #cfc5aa;border-radius:9px}.note{margin-top:28px;color:var(--muted);font-size:12px;line-height:1.6}footer{margin-top:34px;padding-top:20px;border-top:1px solid var(--line);color:var(--muted);font-size:12px}
     @media(max-width:1150px){.team-tabs{order:2;flex-basis:100%;justify-content:flex-start}.summary{grid-template-columns:repeat(3,minmax(0,1fr))}.leaders{grid-template-columns:repeat(3,minmax(0,1fr))}.rank-layout{grid-template-columns:1fr}}@media(max-width:650px){header{padding:14px}.brand{font-size:14px}.team-tab{padding:7px 9px;font-size:11px}.team-tab.department-tab{padding:8px 12px}main{padding:16px 12px 45px}.hero{padding:26px 20px;border-width:5px}.hero h1{letter-spacing:-2px}.summary{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.summary-card{padding:14px 11px}.summary-card b{font-size:20px}.leaders{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.leader-card{padding:14px}.leader-card strong{font-size:14px}.leader-card .value{font-size:18px}.panel{padding:16px}.team-row{grid-template-columns:28px minmax(0,1fr) auto;gap:7px}.team-value{font-size:13px}}
   .hero-logo{position:absolute;z-index:1;right:4%;top:50%;transform:translateY(-50%);display:grid;place-items:center;width:min(39%,570px);height:290px}.hero-logo img{display:block;width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 10px 10px #0c281f66)}.hero>.eyebrow,.hero>h1,.hero>p,.hero>.hero-bottom{max-width:58%}@media(max-width:850px){.hero-logo{position:relative;right:auto;top:auto;transform:none;width:min(100%,540px);height:220px;margin:16px auto}.hero>.eyebrow,.hero>h1,.hero>p,.hero>.hero-bottom{max-width:none}}@media(max-width:500px){.hero-logo{height:160px}}.hero-logo{top:43%}@media(max-width:850px){.hero-logo{top:auto}}.leaders{grid-template-columns:repeat(3,minmax(0,1fr))}@media(max-width:650px){.leaders{grid-template-columns:repeat(2,minmax(0,1fr))}}</style>
-</head>
+<style>
+header .header-team-navigation{display:flex;flex:1 1 600px;min-width:0;flex-direction:column;align-items:center;gap:11px}
+header .header-team-navigation .team-tabs{width:100%;flex:0 0 auto;justify-content:center}
+.department-link{display:inline-flex;align-items:center;gap:12px;min-height:55px;padding:9px 19px;border:2px solid #bc9748;border-radius:13px;background:linear-gradient(135deg,#f8e5af,#ecd18d);color:#214a39;text-decoration:none;box-shadow:0 4px 0 #c6ae76,0 8px 16px #163d2b1c;transition:transform .18s ease,box-shadow .18s ease}
+.department-link:hover{transform:translateY(-2px);box-shadow:0 6px 0 #c6ae76,0 12px 20px #163d2b24}
+.department-link.active{background:linear-gradient(135deg,#285a42,#153d30);border-color:#ba9c55;color:#fff0bd}
+.department-link-icon{display:grid;place-items:center;width:34px;height:34px;border-radius:9px;background:#fff8e4;font-size:20px}
+.department-link-text{display:flex;flex-direction:column;gap:2px;line-height:1.1}.department-link-text strong{font-size:17px}.department-link-text small{font-size:10px;font-weight:700;letter-spacing:.2px}
+.department-link-arrow{margin-left:9px;font-size:21px;line-height:1}
+@media(max-width:700px){header .header-team-navigation{flex-basis:100%}.department-link{min-height:51px;padding:8px 15px}}
+</style></head>
 <body>
   <header>
     <div class="brand"><span class="logo">⚑</span>Спортивная драма</div>
-    <nav class="team-tabs" aria-label="Разделы игры">
-      <a class="team-tab department-tab active" href="department.html" aria-current="page">🏆 Отдел</a>
+    <div class="header-team-navigation"><nav class="team-tabs" aria-label="Команды">
       <a class="team-tab" href="index.html?team=fomenko">Фоменко</a>
       <a class="team-tab" href="index.html?team=lvovsky">Львовский</a>
       <a class="team-tab" href="index.html?team=shabanov">Шабанов</a>
       <a class="team-tab" href="index.html?team=kozhanov">Кожанов</a>
-      <a class="team-tab" href="index.html?team=otrakusha">Отракуша</a>
+      <a class="team-tab" href="index.html?team=otrakusha">Отрокуша</a>
       <a class="team-tab" href="index.html?team=kulikov">Куликов</a>
       <a class="team-tab" href="index.html?team=kondratyev">Кондратьев</a>
       <a class="team-tab" href="index.html?team=chekhova">Чехова</a>
       <a class="team-tab" href="index.html?team=klimentovich">Климентович</a>
       <a class="team-tab" href="index.html?team=bagaturiya">Багатурия</a>
       <a class="team-tab" href="index.html?team=tolstov">Толстов</a>
-    </nav>
+    </nav><a class="department-link active" href="department.html" aria-current="page"><span class="department-link-icon" aria-hidden="true">🏆</span><span class="department-link-text"><strong>Отдел</strong><small>Общий зачёт команд</small></span><span class="department-link-arrow" aria-hidden="true">↗</span></a></div>
   </header>
   <main>
     <div class="hero">

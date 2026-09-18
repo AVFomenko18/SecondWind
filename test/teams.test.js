@@ -7,7 +7,7 @@ const game = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const department = readFileSync(new URL('../department.html', import.meta.url), 'utf8');
 const server = readFileSync(new URL('../server.js', import.meta.url), 'utf8');
 const expected = [
-  ['otrakusha', 'Отракуша', 5],
+  ['otrakusha', 'Отрокуша', 5],
   ['kulikov', 'Куликов', 6],
   ['kondratyev', 'Кондратьев', 7],
   ['chekhova', 'Чехова', 8],
@@ -32,5 +32,16 @@ test('all eleven teams have matching navigation and distinct server storage', ()
     assert.equal(serverConfig.ids[key], id);
     assert.ok(game.includes(`data-team="${key}" href="?team=${key}"`));
     assert.ok(department.includes(`href="index.html?team=${key}">${name}</a>`));
+  }
+});
+
+test('department link sits below all team tabs on both pages', () => {
+  for (const page of [game, department]) {
+    const header = page.slice(page.indexOf('<header'), page.indexOf('</header>'));
+    const tabsEnd = header.indexOf('</nav>');
+    const departmentLink = header.indexOf('class="department-link');
+    assert.ok(tabsEnd >= 0 && departmentLink > tabsEnd);
+    assert.ok(header.indexOf('Толстов</a>') < tabsEnd);
+    assert.ok(header.includes('>Отрокуша</a>'));
   }
 });

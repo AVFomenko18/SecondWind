@@ -211,7 +211,7 @@ const pool = new Pool({
 
 // The original single-team game uses id 1, so its saved progress stays with Fomenko.
 const teamIds = Object.freeze({ fomenko: 1, lvovsky: 2, shabanov: 3, kozhanov: 4, otrakusha: 5, kulikov: 6, kondratyev: 7, chekhova: 8, klimentovich: 9, bagaturiya: 10, tolstov: 11 });
-const teamNames = Object.freeze({ fomenko: 'Фоменко', lvovsky: 'Львовский', shabanov: 'Шабанов', kozhanov: 'Кожанов', otrakusha: 'Отракуша', kulikov: 'Куликов', kondratyev: 'Кондратьев', chekhova: 'Чехова', klimentovich: 'Климентович', bagaturiya: 'Багатурия', tolstov: 'Толстов' });
+const teamNames = Object.freeze({ fomenko: 'Фоменко', lvovsky: 'Львовский', shabanov: 'Шабанов', kozhanov: 'Кожанов', otrakusha: 'Отрокуша', kulikov: 'Куликов', kondratyev: 'Кондратьев', chekhova: 'Чехова', klimentovich: 'Климентович', bagaturiya: 'Багатурия', tolstov: 'Толстов' });
 function teamId(req, res) {
   const key = req.query.team ?? 'fomenko';
   if (typeof key !== 'string' || !Object.hasOwn(teamIds, key)) {
