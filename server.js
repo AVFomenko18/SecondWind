@@ -99,9 +99,8 @@ function protectedChange(before, after) {
   const oldLogs = Array.isArray(before.logs) ? before.logs : [];
   const newLogs = Array.isArray(after.logs) ? after.logs : [];
   if (newLogs.length < oldLogs.length || (oldLogs.length > 0 && !isDeepStrictEqual(newLogs.slice(-oldLogs.length), oldLogs))) return true;
-  const oldChallenges = (Array.isArray(before.ledger) ? before.ledger : []).filter(x => x?.source === 'challenge');
-  const newChallenges = (Array.isArray(after.ledger) ? after.ledger : []).filter(x => x?.source === 'challenge');
-  return !isDeepStrictEqual(oldChallenges, newChallenges);
+  const adminEntries = ledger => (Array.isArray(ledger) ? ledger : []).filter(x => ['challenge', 'manual'].includes(x?.source));
+  return !isDeepStrictEqual(adminEntries(before.ledger), adminEntries(after.ledger));
 }
 
 function canonicalJson(value) {
@@ -409,7 +408,7 @@ app.get('/api/department', async (req, res) => {
         laps: Math.floor(nonnegativeNumber(player.high) / 60),
         calls: nonnegativeNumber(player.calls),
         crossSales: nonnegativeNumber(player.cross),
-        coins: ledger.reduce((sum, item) => sum + (item?.playerId === player.id && ['milestone', 'challenge'].includes(item?.source) ? nonnegativeNumber(item.amount) : 0), 0)
+        coins: ledger.reduce((sum, item) => sum + (item?.playerId === player.id && ['milestone', 'challenge', 'manual'].includes(item?.source) ? nonnegativeNumber(item.amount) : 0), 0)
       }));
       const totals = players.reduce((sum, player) => {
         for (const key of ['steps', 'revenue', 'laps', 'calls', 'crossSales', 'coins']) sum[key] += player[key];
