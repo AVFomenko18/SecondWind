@@ -12,7 +12,7 @@ test('former boost, shield and cramp cells now move normally; milestones still p
   const state = { config: { milestones: [1, 1, 1, 1, 1] }, ledger: [] };
   const animations = [];
   const context = {
-    state, CHECKPOINT_EVERY: 3, CHECKPOINT_COINS: 3, LAP_COINS: 2, writable: () => true, pnow: () => player,
+    state, CHECKPOINT_EVERY: 6, CHECKPOINT_COINS: 5, LAP_COINS: 2, writable: () => true, pnow: () => player,
     num: (value, min, max) => Number.isSafeInteger(value) && value >= min && value <= max,
     actionAnchor: () => null, snapshot: () => {}, log: () => {}, commit: () => {},
     showEarnedPop: () => {}, toast: () => {}, medals: () => state.ledger.reduce((sum, entry) => sum + entry.amount, 0),
@@ -31,7 +31,7 @@ test('former boost, shield and cramp cells now move normally; milestones still p
   assert.equal(player.high, 16);
   assert.equal(player.shields, 1);
   assert.deepEqual(player.used, []);
-  assert.deepEqual(state.ledger.map(entry => [entry.ref, entry.amount]), [[6, 3], [9, 3], [12, 3], [15, 3]]);
+  assert.deepEqual(state.ledger.map(entry => [entry.ref, entry.amount]), [[6, 5], [12, 5]]);
 });
 
 test('run button spends the whole earned balance, beyond six steps and across laps', () => {
@@ -42,7 +42,7 @@ test('run button spends the whole earned balance, beyond six steps and across la
   const state = { config: { milestones: [1, 1, 1, 1, 1] }, ledger: [] };
   const animations = [];
   const context = {
-    state, CHECKPOINT_EVERY: 3, CHECKPOINT_COINS: 3, LAP_COINS: 2, writable: () => true, pnow: () => player,
+    state, CHECKPOINT_EVERY: 6, CHECKPOINT_COINS: 5, LAP_COINS: 2, writable: () => true, pnow: () => player,
     num: (value, min, max) => Number.isSafeInteger(value) && value >= min && value <= max,
     actionAnchor: () => null, snapshot: () => {}, log: () => {}, commit: () => {},
     showEarnedPop: () => {}, toast: () => {}, medals: () => state.ledger.length,
@@ -55,8 +55,8 @@ test('run button spends the whole earned balance, beyond six steps and across la
   context.movePlayer();
   assert.equal(player.pos, 75);
   assert.equal(player.bank, 0);
-  assert.deepEqual(state.ledger.map(entry => entry.ref), [57, 60, 63, 66, 69, 72, 75]);
-  assert.deepEqual(state.ledger.map(entry => entry.amount), [3, 2, 3, 3, 3, 3, 3]);
+  assert.deepEqual(state.ledger.map(entry => entry.ref), [60, 66, 72]);
+  assert.deepEqual(state.ledger.map(entry => entry.amount), [2, 5, 5]);
   assert.equal(animations[0][3], 75);
 });
 
@@ -68,7 +68,7 @@ test('every completed lap pays exactly two coins, including multiple laps in one
   // Existing saved teams still have 1 in the old fifth-milestone setting.
   const state = { config: { milestones: [1, 1, 1, 1, 1] }, ledger: [] };
   const context = {
-    state, CHECKPOINT_EVERY: 3, CHECKPOINT_COINS: 3, LAP_COINS: 2, writable: () => true, pnow: () => player,
+    state, CHECKPOINT_EVERY: 6, CHECKPOINT_COINS: 5, LAP_COINS: 2, writable: () => true, pnow: () => player,
     num: (value, min, max) => Number.isSafeInteger(value) && value >= min && value <= max,
     actionAnchor: () => null, snapshot: () => {}, log: () => {}, commit: () => {},
     showEarnedPop: () => {}, toast: () => {}, medals: () => state.ledger.reduce((total, entry) => total + entry.amount, 0),
@@ -81,7 +81,7 @@ test('every completed lap pays exactly two coins, including multiple laps in one
   assert.equal(player.pos, 180);
   assert.equal(player.bank, 0);
   assert.deepEqual(state.ledger.filter(entry => entry.ref % 60 === 0).map(entry => [entry.ref, entry.amount]), [[60, 2], [120, 2], [180, 2]]);
-  assert.equal(state.ledger.reduce((total, entry) => total + entry.amount, 0), 123);
+  assert.equal(state.ledger.reduce((total, entry) => total + entry.amount, 0), 96);
 });
 
 test('long movement animation uses a bounded number of frames', () => {
@@ -112,4 +112,36 @@ test('track cells beyond six steps can be selected when the player has enough st
   vm.runInContext(html.slice(start, end), context);
   assert.equal(context.reachable(19), 16);
   assert.equal(context.reachable(24), 0);
+});
+
+test('saved milestone ledger accepts old third cells and the new sixth-cell checkpoint', () => {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const start = html.indexOf('function valid(s){');
+  const end = html.indexOf('\nfunction migrateOld(', start);
+  assert.ok(start >= 0 && end > start);
+  const context = {
+    configValid: () => true,
+    str: value => typeof value === 'string' && value.length > 0,
+    stamp: value => !Number.isNaN(Date.parse(value)),
+    num: (value, min, max) => Number.isSafeInteger(value) && value >= min && value <= max,
+    unique: items => new Set(items.map(item => item.id)).size === items.length,
+    COLORS: ['#000']
+  };
+  vm.createContext(context);
+  vm.runInContext(html.slice(start, end), context);
+  const player = {
+    id: 'p', name: 'Оля', pos: 12, high: 12, bank: 0,
+    cash: 0, cashBase: 0, calls: 0, cross: 0, shields: 0,
+    color: '#000', used: [], actionCounts: {}
+  };
+  const state = {
+    version: 3, id: 'game', updated: '2026-09-18T00:00:00Z',
+    config: {}, players: [player], logs: [], rewards: [], ledger: [
+      { id: 'old', playerId: 'p', amount: 3, source: 'milestone', ref: '9', title: 'Старый рубеж', at: '2026-09-18T00:00:00Z' },
+      { id: 'new', playerId: 'p', amount: 5, source: 'milestone', ref: '12', title: 'Новый рубеж', at: '2026-09-18T00:00:00Z' }
+    ]
+  };
+  assert.equal(context.valid(state), true);
+  state.ledger[1].ref = '6';
+  assert.equal(context.valid(state), true);
 });
