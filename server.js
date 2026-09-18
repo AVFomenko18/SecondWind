@@ -285,6 +285,34 @@ app.get('/api/prize-stock', async (_req, res) => {
   }
 });
 
+// Recent reward purchases across the whole department, for the public game feed.
+app.get('/api/reward-feed', async (_req, res) => {
+  try {
+    await ensureTable();
+    const result = await pool.query('SELECT id, data FROM game_state WHERE id = ANY($1::int[])', [Object.values(teamIds)]);
+    const teamsById = Object.fromEntries(Object.entries(teamIds).map(([key, id]) => [id, teamNames[key]]));
+    const entries = result.rows.flatMap(({ id, data }) => {
+      const players = new Map((Array.isArray(data?.players) ? data.players : []).map(player => [player.id, player.name]));
+      return (Array.isArray(data?.rewards) ? data.rewards : [])
+        .filter(reward => reward?.source === 'shop' && !reward.cancelled && typeof reward.at === 'string')
+        .map(reward => ({
+          id: `${id}:${reward.id}`,
+          team: teamsById[id],
+          player: players.get(reward.playerId) || 'Участник',
+          title: reward.title,
+          cost: reward.cost,
+          superPrize: countedReward(reward),
+          at: reward.at
+        }));
+    }).filter(entry => typeof entry.title === 'string' && Number.isSafeInteger(entry.cost) && Number.isFinite(Date.parse(entry.at)))
+      .sort((a, b) => Date.parse(b.at) - Date.parse(a.at)).slice(0, 150);
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ entries });
+  } catch (error) {
+    databaseError(res, error);
+  }
+});
+
 // Сохранить состояние
 app.post('/api/game-state', async (req, res) => {
   const id = teamId(req, res);
