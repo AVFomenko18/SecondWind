@@ -5,13 +5,21 @@ export const SUPER_CHEST_CHANCE = 0.02;
 export const SOUVENIR_SECTORS = 3;
 export const MINI_PRIZES = Object.freeze([
   { id: 'mini-bank-charm', name: 'Оберег от отказов банка', icon: '🧿' },
-  { id: 'mini-garlic', name: 'Золотой чеснок с логотипом Т-Банка', icon: '🧄' },
-  { id: 'mini-call-potion', name: 'Зелье удачного дозвона', icon: '🧪' },
+  { id: 'mini-garlic', name: 'Чеснок для отпугивания CCC клиентов', icon: '🧄' },
+  { id: 'mini-call-potion', name: 'Зелье оплат в касание', icon: '🧪' },
   { id: 'mini-objection-hammer', name: 'Молот отработки возражений', icon: '🔨' },
-  { id: 'mini-lead-compass', name: 'Компас горячих лидов', icon: '🧭' },
+  { id: 'mini-lead-compass', name: 'Компас переговорных путей', icon: '🧭' },
   { id: 'mini-client-amulet', name: 'Амулет спокойного клиента', icon: '✨' },
   { id: 'mini-script-feather', name: 'Перо идеального скрипта', icon: '🪶' },
-  { id: 'mini-deal-magnet', name: 'Магнит закрытых сделок', icon: '🧲' }
+  { id: 'mini-deal-magnet', name: 'Магнит закрытых сделок', icon: '🧲' },
+  { id: 'mini-meeting-shield', name: 'Щит от переноса встречи', icon: '🛡️' },
+  { id: 'mini-needs-lens', name: 'Лупа скрытой потребности', icon: '🔍' },
+  { id: 'mini-client-boomerang', name: 'Бумеранг пропавшего клиента', icon: '🪃' },
+  { id: 'mini-warm-lead-lantern', name: 'Фонарь тёплого лида', icon: '🏮' },
+  { id: 'mini-next-call-key', name: 'Ключ к следующему созвону', icon: '🗝️' },
+  { id: 'mini-timing-watch', name: 'Часы удачного касания', icon: '⏱️' },
+  { id: 'mini-pitch-cloak', name: 'Плащ уверенного питча', icon: '🦸' },
+  { id: 'mini-offer-die', name: 'Кубик удачного оффера', icon: '🎲' }
 ]);
 
 export function caseWeight(item) {

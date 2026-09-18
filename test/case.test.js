@@ -37,7 +37,8 @@ test('two percent of eligible case openings enter the chest round', () => {
 });
 
 test('a chest round has one super prize and two distinct mini prizes', () => {
-  assert.ok(MINI_PRIZES.length >= 8);
+  assert.equal(MINI_PRIZES.length, 16);
+  assert.equal(new Set(MINI_PRIZES.map(item => item.id)).size, MINI_PRIZES.length);
   const round = createChestRound({ id: 'rare', name: 'Выходной' }, max => max - 1);
   assert.equal(round.position, 2);
   assert.equal(round.prize.id, 'rare');
