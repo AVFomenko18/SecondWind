@@ -96,7 +96,10 @@ app.post('/api/admin/logout', (req, res) => {
 function protectedChange(before, after) {
   if (!before || Object.keys(before).length === 0) return false;
   if (!after || typeof after !== 'object') return true;
+  if (!Array.isArray(after.players) || !Array.isArray(after.ledger)) return true;
   if (!isDeepStrictEqual(before.config, after.config) || before.id !== after.id) return true;
+  const remainingPlayers = new Set(after.players.map(player => player.id));
+  if ((Array.isArray(before.players) ? before.players : []).some(player => !remainingPlayers.has(player.id))) return true;
   const oldLogs = Array.isArray(before.logs) ? before.logs : [];
   const newLogs = Array.isArray(after.logs) ? after.logs : [];
   if (newLogs.length < oldLogs.length || (oldLogs.length > 0 && !isDeepStrictEqual(newLogs.slice(-oldLogs.length), oldLogs))) return true;
@@ -139,7 +142,8 @@ function inventoryChanges(before, after, ids) {
     }
     // Rolling back a purchase within the same period restores stock.
     for (const [rewardId, reward] of previous) {
-      if (!next.has(rewardId) && !reward.cancelled) change--;
+      // An opened case is final even if its manager is later removed.
+      if (!next.has(rewardId) && !reward.cancelled && !reward.case) change--;
     }
     changes[id] = change;
   }
@@ -443,11 +447,14 @@ app.post('/api/game-state', async (req, res) => {
     const currentSuperIds = new Set(requestedShop.filter(item => item.superPrize).map(item => item.id));
     const previousRewards = new Map((Array.isArray(before.rewards) ? before.rewards : []).map(reward => [reward.id, reward]));
     const incomingRewards = new Map((Array.isArray(req.body?.rewards) ? req.body.rewards : []).map(reward => [reward.id, reward]));
+    const remainingPlayers = new Set((Array.isArray(req.body?.players) ? req.body.players : []).map(player => player.id));
     for (const previous of before.id === req.body?.id ? previousRewards.values() : []) {
       if (!previous.case) continue;
       const incoming = incomingRewards.get(previous.id);
       const beforeSpend = before.ledger?.find(entry => entry.source === 'purchase' && entry.ref === previous.id);
       const afterSpend = req.body?.ledger?.find(entry => entry.source === 'purchase' && entry.ref === previous.id);
+      if (!incoming && !remainingPlayers.has(previous.playerId) && !afterSpend &&
+          !req.body.ledger?.some(entry => entry.source === 'refund' && entry.ref === previous.id)) continue;
       if (!incoming || incoming.cancelled || !incoming.case ||
           ['id', 'playerId', 'prizeId', 'title', 'cost', 'source', 'superPrize', 'at'].some(key => incoming[key] !== previous[key]) ||
           !isDeepStrictEqual(afterSpend, beforeSpend) ||
