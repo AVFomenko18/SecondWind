@@ -120,17 +120,6 @@ function inventoryChanges(before, after) {
   return changes;
 }
 
-function duplicateSuperPrize(after) {
-  const owned = new Set();
-  for (const reward of Array.isArray(after?.rewards) ? after.rewards : []) {
-    if (!SUPER_PRIZE_LIMITS[reward?.prizeId] || reward.cancelled) continue;
-    const key = `${reward.playerId}|${reward.prizeId}`;
-    if (owned.has(key)) return true;
-    owned.add(key);
-  }
-  return false;
-}
-
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
@@ -261,10 +250,6 @@ app.post('/api/game-state', async (req, res) => {
     if (!isAdmin(req) && (!current.rows.length || protectedChange(before, req.body))) {
       await client.query('ROLLBACK');
       return res.status(403).json({ error: 'Изменять настройки, историю и челленджи может только руководитель группы.' });
-    }
-    if (duplicateSuperPrize(req.body)) {
-      await client.query('ROLLBACK');
-      return res.status(422).json({ error: 'Один менеджер может купить каждый супер-приз только один раз.' });
     }
     for (const [prizeId, change] of Object.entries(inventoryChanges(before, req.body))) {
       if (!change) continue;
