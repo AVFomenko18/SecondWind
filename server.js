@@ -377,10 +377,9 @@ app.get('/api/case-catalog', async (_req, res) => {
       pool.query('SELECT prize_id, purchased, limit_count FROM super_prize_inventory')
     ]);
     const items = casePool(catalog.rows[0].data, inventory.rows);
-    const total = items.reduce((sum, item) => sum + item.weight, 0);
     res.setHeader('Cache-Control', 'no-store');
-    res.json({ cost: CASE_COST, items: items.map(({ id, name, cost, superPrize, remaining, weight }) =>
-      ({ id, name, cost, superPrize, remaining, chance: total ? weight / total * 100 : 0 })) });
+    res.json({ cost: CASE_COST, items: items.map(({ id, name, cost, superPrize, remaining }) =>
+      ({ id, name, cost, superPrize, remaining })) });
   } catch (error) {
     databaseError(res, error);
   }

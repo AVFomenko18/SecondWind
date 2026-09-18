@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
-test('shop sells a case, shows odds, and does not offer a case refund', () => {
+test('shop sells a case without showing percentage odds or offering a refund', () => {
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   const start = html.indexOf('function caseIcon(item){');
   const end = html.indexOf('\nasync function openCase(){', start);
@@ -12,8 +12,8 @@ test('shop sells a case, shows odds, and does not offer a case refund', () => {
   const context = {
     state: { players: [player], rewards: [{ playerId: player.id, title: 'Приз', cost: 2, source: 'shop', case: true, claimed: false, cancelled: false }] },
     pnow: () => player, medals: () => 3, playerSelect: () => '<select></select>', esc: value => String(value),
-    caseCatalog: { cost: 2, items: [{ id: 'prize-0', name: 'Простой приз', cost: 1, chance: 99.8, superPrize: false },
-      { id: 'prize-20', name: 'Редкий приз', cost: 7, chance: 0.2, superPrize: true, remaining: 3 }] },
+    caseCatalog: { cost: 2, items: [{ id: 'prize-0', name: 'Простой приз', cost: 1, superPrize: false },
+      { id: 'prize-20', name: 'Редкий приз', cost: 7, superPrize: true, remaining: 3 }] },
     caseLastReward: null, caseCatalogError: '', caseOpening: false, apiReady: true
   };
   vm.createContext(context);
@@ -21,10 +21,43 @@ test('shop sells a case, shows odds, and does not offer a case refund', () => {
   const view = context.prizesView();
   assert.match(view, /Открыть кейс/);
   assert.match(view, /2 🪙 за открытие/);
-  assert.match(view, /0,20%/);
+  assert.doesNotMatch(view, /\d+[,.]?\d*%/);
+  assert.doesNotMatch(view, /Шансы и доступные награды/);
   assert.match(view, /осталось 3 шт/);
   assert.doesNotMatch(view, /Вернуть монетки/);
   assert.doesNotMatch(view, /buyPrize/);
+});
+
+test('the reel shows at most one nearby super prize', () => {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const start = html.indexOf('function casePreviewItems(items){');
+  const end = html.indexOf('\nfunction prizesView(){', start);
+  assert.ok(start >= 0 && end > start);
+  const context = { Math };
+  vm.createContext(context);
+  vm.runInContext(html.slice(start, end), context);
+  const ordinary = [{ id: 'a', name: 'Обед', cost: 1, superPrize: false }, { id: 'b', name: 'Выходной', cost: 2, superPrize: false }];
+  const superPrizes = [{ id: 's1', name: 'Кино', cost: 5, superPrize: true }, { id: 's2', name: 'Day off', cost: 7, superPrize: true }];
+  const options = [...ordinary, ...superPrizes];
+  assert.equal(context.casePreviewItems(options).slice(0, 7).filter(item => item.superPrize).length, 1);
+  assert.equal(context.casePreviewItems(superPrizes).slice(0, 7).filter(item => item.superPrize).length, 1);
+  for (const prize of [ordinary[0], superPrizes[0]]) {
+    for (let attempt = 0; attempt < 25; attempt++) {
+      const { sequence, winnerIndex } = context.caseSpinSequence(options.filter(item => item.id !== prize.id), prize);
+      assert.equal(sequence[winnerIndex].id, prize.id);
+      assert.equal(sequence.slice(winnerIndex - 3, winnerIndex + 4).filter(item => item.superPrize).length, 1);
+    }
+  }
+});
+
+test('public case catalog does not return probability weights', () => {
+  const server = readFileSync(new URL('../server.js', import.meta.url), 'utf8');
+  const start = server.indexOf("app.get('/api/case-catalog'");
+  const end = server.indexOf("app.post('/api/open-case'", start);
+  assert.ok(start >= 0 && end > start);
+  const catalog = server.slice(start, end);
+  assert.ok(!catalog.includes('chance:'));
+  assert.ok(!catalog.includes('weight:'));
 });
 
 test('retrying an uncertain opening reuses its request id', async () => {
@@ -68,7 +101,7 @@ test('case stays a surprise during the longer spin and celebrates the saved rewa
   const context = {
     state: { players: [player], rewards: [reward] }, pnow: () => player, medals: () => 3,
     playerSelect: () => '<select></select>', esc: value => String(value),
-    caseCatalog: { cost: 2, items: [{ id: 'prize-20', name: 'Day off', cost: 7, chance: 1, superPrize: true, remaining: 4 }] },
+    caseCatalog: { cost: 2, items: [{ id: 'prize-20', name: 'Day off', cost: 7, superPrize: true, remaining: 4 }] },
     caseLastReward: reward, caseCatalogError: '', caseOpening: true, apiReady: true
   };
   vm.createContext(context);

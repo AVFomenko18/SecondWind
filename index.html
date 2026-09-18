@@ -271,13 +271,35 @@ function movePlayer(count){if(!writable())return;let p=pnow(),n=count===undefine
 function undo(){if(!adminWrite())return;if(state.logs[0]?.reverse)return rollbackToLog(0);if(!writable()||!state.undo)return;if(!confirm('Отменить последнее действие вместе с изменениями шагов, монеток, покупок и настроек?'))return;state=state.undo;state.undo=null;commit();toast('Последнее действие отменено')}
 function caseIcon(item){return ({'prize-0':'😴','prize-1':'🏃','prize-2':'🍝','prize-3':'🤫','prize-4':'📝','prize-5':'🛡️','prize-6':'🙅','prize-7':'📚','prize-8':'🎁','prize-9':'🎬','prize-20':'🏖️','prize-21':'🤖','prize-22':'🎞️'})[item.id]||'⭐'}
 function caseTile(item){return '<div class="case-tile '+(item.superPrize?'super':'')+'"><span class="case-icon">'+caseIcon(item)+'</span><span>'+esc(item.name)+'</span></div>'}
+function casePreviewItems(items){
+  if(!items.length)return [];
+  const ordinary=items.filter(item=>!item.superPrize);
+  const fillers=ordinary.length?ordinary:[{id:'case-filler',name:'Награда',superPrize:false}];
+  const preview=Array.from({length:12},(_,index)=>fillers[index%fillers.length]);
+  const superPrize=items.find(item=>item.superPrize);
+  if(superPrize)preview[3]=superPrize;
+  return preview;
+}
+function caseSpinSequence(items,prize){
+  const winnerIndex=26,ordinary=items.filter(item=>!item.superPrize);
+  const filler=()=>ordinary[Math.floor(Math.random()*ordinary.length)]||(!prize.superPrize?prize:{id:'case-filler',name:'Награда',superPrize:false});
+  const pool=items.length?items:[prize];
+  const sequence=Array.from({length:34},()=>pool[Math.floor(Math.random()*pool.length)]);
+  for(let index=winnerIndex-3;index<=winnerIndex+3;index++)sequence[index]=filler();
+  sequence[winnerIndex]=prize;
+  if(!prize.superPrize){
+    const neighboringSuper=items.filter(item=>item.superPrize).sort((a,b)=>b.cost-a.cost)[0];
+    if(neighboringSuper)sequence[winnerIndex+(Math.random()<.5?-1:1)]=neighboringSuper;
+  }
+  return {sequence,winnerIndex};
+}
 function prizesView(){
   const p=pnow(),cost=caseCatalog?.cost||2,items=caseCatalog?.items||[];
-  const odds=items.slice().sort((a,b)=>a.cost-b.cost||a.name.localeCompare(b.name,'ru')).map(item=>'<div class="case-odds-item '+(item.superPrize?'super':'')+'"><span>'+caseIcon(item)+' '+esc(item.name)+(item.superPrize?'<small>Супер-приз · осталось '+item.remaining+' шт. на отдел</small>':'')+'</span><b>'+Number(item.chance).toLocaleString('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2})+'%</b></div>').join('');
+  const rewards=items.slice().sort((a,b)=>a.cost-b.cost||a.name.localeCompare(b.name,'ru')).map(item=>'<div class="case-odds-item '+(item.superPrize?'super':'')+'"><span>'+caseIcon(item)+' '+esc(item.name)+(item.superPrize?'<small>Супер-приз · осталось '+item.remaining+' шт. на отдел</small>':'')+'</span></div>').join('');
   return '<div class="panel wide"><div class="eyebrow">МОНЕТКИ ЗА РЕЗУЛЬТАТ · КЕЙС С НАГРАДАМИ</div><h2>Магазин команды</h2><p class="muted">Откройте кейс — выпадет одна из доступных наград. Чем дороже приз, тем реже он встречается. Результат выбирает сервер до прокрутки.</p>'+
     (p?playerSelect()+'<div class="wallet"><span>'+esc(p.name)+' · доступно</span><strong>🪙 '+medals(p)+'</strong></div>':'<div class="notice">Сначала добавьте участника на игровом поле.</div>')+
-    '<section class="case-panel"><div class="case-controls"><div><span class="eyebrow">ОДНО ОТКРЫТИЕ · ОДНА НАГРАДА</span><h3>🎁 Кейс «Бежим на максимум»</h3><span class="case-price">'+cost+' 🪙 за открытие</span></div><button id="openCaseButton" type="button" onclick="openCase()" '+(!p||!apiReady||caseOpening||!items.length||medals(p)<cost?'disabled':'')+'>'+(caseOpening?'Кейс открывается…':!items.length?'Загружаем призы':p&&medals(p)<cost?'Нужно '+cost+' мон.':'Открыть кейс')+'</button></div><p>Шансы и доступные награды указаны ниже. Супер-призы ограничены общим запасом отдела.</p><div class="case-window"><div class="case-pointer"></div><div class="case-reel" id="caseReel">'+(items.slice(0,12).map(caseTile).join('')||'<span class="reward-feed-empty">Загружаем награды…</span>')+'</div></div><div class="case-result'+(caseLastReward?.superPrize?' super':'')+'" id="caseResult" role="status">'+(caseLastReward&&!caseOpening?'Выпало: '+esc(caseLastReward.title)+(caseLastReward.superPrize?' ✨ СУПЕР-ПРИЗ!':''):caseOpening?'Кейс открывается…':caseCatalogError?esc(caseCatalogError):'Выберите участника и откройте кейс')+'</div></section>'+
-    '<section class="case-odds"><h3>Что может выпасть</h3><p class="muted">Проценты пересчитываются при изменении ассортимента или окончании супер-призов. Прокрутка показывает уже определённый результат.</p><div class="case-odds-list">'+(odds||'<div class="empty">Награды пока недоступны.</div>')+'</div></section>'+
+    '<section class="case-panel"><div class="case-controls"><div><span class="eyebrow">ОДНО ОТКРЫТИЕ · ОДНА НАГРАДА</span><h3>🎁 Кейс «Бежим на максимум»</h3><span class="case-price">'+cost+' 🪙 за открытие</span></div><button id="openCaseButton" type="button" onclick="openCase()" '+(!p||!apiReady||caseOpening||!items.length||medals(p)<cost?'disabled':'')+'>'+(caseOpening?'Кейс открывается…':!items.length?'Загружаем призы':p&&medals(p)<cost?'Нужно '+cost+' мон.':'Открыть кейс')+'</button></div><p>Доступные награды указаны ниже. Супер-призы ограничены общим запасом отдела.</p><div class="case-window"><div class="case-pointer"></div><div class="case-reel" id="caseReel">'+(casePreviewItems(items).map(caseTile).join('')||'<span class="reward-feed-empty">Загружаем награды…</span>')+'</div></div><div class="case-result'+(caseLastReward?.superPrize?' super':'')+'" id="caseResult" role="status">'+(caseLastReward&&!caseOpening?'Выпало: '+esc(caseLastReward.title)+(caseLastReward.superPrize?' ✨ СУПЕР-ПРИЗ!':''):caseOpening?'Кейс открывается…':caseCatalogError?esc(caseCatalogError):'Выберите участника и откройте кейс')+'</div></section>'+
+    '<section class="case-odds"><h3>Что может выпасть</h3><p class="muted">Состав кейса обновляется при изменении ассортимента или окончании супер-призов. Прокрутка показывает уже определённый результат.</p><div class="case-odds-list">'+(rewards||'<div class="empty">Награды пока недоступны.</div>')+'</div></section>'+
     '<h2 style="margin-top:28px">Открытые награды</h2><p class="muted">Выдачу отмечает ведущий. Открытый кейс нельзя отменить после раскрытия приза.</p>'+
     (state.rewards.length?state.rewards.map((r,i)=>caseOpening&&caseLastReward?.id===r.id?'':'<div class="reward"><div><b>'+esc(state.players.find(player=>player.id===r.playerId)?.name||'Участник')+'</b><p>'+esc(r.title)+'</p><small>'+(r.source==='legacy'?'Приз из прежней версии':r.case?'Кейс · '+r.cost+' мон.':r.cost+' мон.')+' · '+(r.cancelled?'Отменено, монетки возвращены':r.claimed?'✓ Выдано':'Ожидает выдачи')+'</small></div><div class="row">'+(!r.cancelled?'<button onclick="claim('+i+')">'+(r.claimed?'Вернуть в ожидание':'Отметить выданным')+'</button>'+(!r.claimed&&r.source==='shop'&&!r.case?'<button onclick="refundPurchase('+i+')">Вернуть монетки</button>':''):'')+'</div></div>').join(''):'<div class="empty">Откройте первый кейс после того, как заработаете монетки.</div>')+'</div>';
 }
@@ -307,11 +329,7 @@ function animateCase(reward){
   if(!windowElement||!reel){finishCaseAnimation(reward);return Promise.resolve()}
   const options=(caseCatalog?.items||[]).filter(item=>item.id!==reward.prizeId);
   const prize=caseCatalog?.items.find(item=>item.id===reward.prizeId)||{id:reward.prizeId,name:reward.title,superPrize:reward.superPrize};
-  const expensive=options.slice().sort((a,b)=>b.cost-a.cost||Number(b.superPrize)-Number(a.superPrize));
-  const randomItem=()=>options[Math.floor(Math.random()*options.length)]||prize;
-  const winnerIndex=26,sequence=Array.from({length:34},randomItem);
-  sequence[winnerIndex]=prize;
-  if(expensive.length){sequence[winnerIndex-1]=expensive[0];sequence[winnerIndex+1]=expensive[1]||expensive[0]}
+  const {sequence,winnerIndex}=caseSpinSequence(options,prize);
   reel.innerHTML=sequence.map(caseTile).join('');
   const card=reel.firstElementChild,step=card.getBoundingClientRect().width+10;
   const target=(winnerIndex+.5)*step-5-windowElement.clientWidth/2;
