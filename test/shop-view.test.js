@@ -26,7 +26,12 @@ test('shop shows a prize wheel without percentage odds or a case refund', () => 
   assert.match(view, /2 🪙 за открытие/);
   assert.doesNotMatch(view, /\d+[,.]?\d*%/);
   assert.doesNotMatch(view, /Шансы и доступные награды/);
-  assert.match(view, /осталось 3 шт/);
+  assert.match(view, /Осталось <b>3<\/b> штук/);
+  assert.match(view, /Мини-призы/);
+  assert.match(view, /Награды за спортивные заслуги/);
+  assert.match(view, /Супер-призы/);
+  assert.equal((view.match(/case-super-card/g) || []).length, 1);
+  assert.doesNotMatch(view, /Супер-приз · осталось/);
   assert.doesNotMatch(view, /Вернуть монетки/);
   assert.doesNotMatch(view, /buyPrize/);
 });
