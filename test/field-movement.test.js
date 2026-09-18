@@ -57,7 +57,32 @@ test('run button spends the whole earned balance, beyond six steps and across la
   assert.equal(player.pos, 75);
   assert.equal(player.bank, 0);
   assert.deepEqual(state.ledger.map(entry => entry.ref), [60, 72]);
+  assert.deepEqual(state.ledger.map(entry => entry.amount), [2, 1]);
   assert.equal(animations[0][3], 75);
+});
+
+test('every completed lap pays exactly two coins, including multiple laps in one run', () => {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const start = html.indexOf('function movePlayer(count){');
+  const end = html.indexOf('\nfunction undo(){', start);
+  const player = { id: 'player-1', name: 'Оля', pos: 55, high: 55, bank: 125, shields: 0, used: [] };
+  // Existing saved teams still have 1 in the old fifth-milestone setting.
+  const state = { config: { milestones: [1, 1, 1, 1, 1] }, ledger: [] };
+  const context = {
+    state, writable: () => true, pnow: () => player,
+    num: (value, min, max) => Number.isSafeInteger(value) && value >= min && value <= max,
+    actionAnchor: () => null, snapshot: () => {}, log: () => {}, commit: () => {},
+    showEarnedPop: () => {}, toast: () => {}, medals: () => state.ledger.reduce((total, entry) => total + entry.amount, 0),
+    award: (_player, amount, source, ref) => { state.ledger.push({ amount, source, ref }); return true },
+    animateRun: () => {}, document: { getElementById: () => ({ textContent: '' }) }
+  };
+  vm.createContext(context);
+  vm.runInContext(html.slice(start, end), context);
+  context.movePlayer();
+  assert.equal(player.pos, 180);
+  assert.equal(player.bank, 0);
+  assert.deepEqual(state.ledger.filter(entry => entry.ref % 60 === 0).map(entry => [entry.ref, entry.amount]), [[60, 2], [120, 2], [180, 2]]);
+  assert.equal(state.ledger.reduce((total, entry) => total + entry.amount, 0), 14);
 });
 
 test('long movement animation uses a bounded number of frames', () => {
