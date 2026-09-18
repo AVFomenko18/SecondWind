@@ -624,6 +624,12 @@ app.post('/api/game-state', async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(403).json({ error: 'Изменять настройки, историю и челленджи может только руководитель группы.' });
     }
+    if (!Array.isArray(req.body?.players) || req.body.players.some(player => player?.avatar !== undefined &&
+        (typeof player.avatar !== 'string' || player.avatar.length > 300000 ||
+          !/^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(player.avatar)))) {
+      await client.query('ROLLBACK');
+      return res.status(422).json({ error: 'Картинка персонажа повреждена или слишком велика.' });
+    }
     const requestedShop = req.body?.config?.shop;
     if (!validShop(requestedShop)) {
       await client.query('ROLLBACK');
