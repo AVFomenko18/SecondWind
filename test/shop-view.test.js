@@ -56,3 +56,42 @@ test('retrying an uncertain opening reuses its request id', async () => {
   assert.deepEqual(ids, [ids[0], ids[0]]);
   assert.equal(context.caseRequestId, '');
 });
+
+test('case stays a surprise during the longer spin and celebrates the saved reward', () => {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  assert.match(html, /case-reel\.spinning\{transition:transform 10s /);
+  assert.match(html, /setTimeout\(done,10800\)/);
+  const viewStart = html.indexOf('function caseIcon(item){');
+  const viewEnd = html.indexOf('\nasync function openCase(){', viewStart);
+  const reward = { id: 'case-1', playerId: 'player-1', prizeId: 'prize-20', title: 'Day off', cost: 2, source: 'shop', case: true, superPrize: true };
+  const player = { id: 'player-1', name: 'Оля' };
+  const context = {
+    state: { players: [player], rewards: [reward] }, pnow: () => player, medals: () => 3,
+    playerSelect: () => '<select></select>', esc: value => String(value),
+    caseCatalog: { cost: 2, items: [{ id: 'prize-20', name: 'Day off', cost: 7, chance: 1, superPrize: true, remaining: 4 }] },
+    caseLastReward: reward, caseCatalogError: '', caseOpening: true, apiReady: true
+  };
+  vm.createContext(context);
+  vm.runInContext(html.slice(viewStart, viewEnd), context);
+  const spinningView = context.prizesView();
+  assert.match(spinningView, /Кейс открывается…/);
+  assert.doesNotMatch(spinningView, /Выпало: Day off/);
+  assert.doesNotMatch(spinningView, /<p>Day off<\/p>/);
+  context.caseOpening = false;
+  assert.match(context.prizesView(), /Выпало: Day off/);
+
+  const celebrationStart = html.indexOf('function showCaseCelebration(reward){');
+  const celebrationEnd = html.indexOf('\nfunction finishCaseAnimation(reward){', celebrationStart);
+  const elements = Object.fromEntries(['caseWinDialog', 'caseWinIcon', 'caseWinTitle', 'caseWinType', 'caseConfetti'].map(id => [id, { textContent: '', innerHTML: '' }]));
+  elements.caseWinDialog.open = false;
+  elements.caseWinDialog.classList = { toggle: (_name, enabled) => { elements.caseWinDialog.super = enabled; } };
+  elements.caseWinDialog.showModal = () => { elements.caseWinDialog.open = true; };
+  context.document = { getElementById: id => elements[id] };
+  vm.runInContext(html.slice(celebrationStart, celebrationEnd), context);
+  context.showCaseCelebration(reward);
+  assert.equal(elements.caseWinDialog.open, true);
+  assert.equal(elements.caseWinDialog.super, true);
+  assert.equal(elements.caseWinTitle.textContent, 'Day off');
+  assert.match(elements.caseWinType.textContent, /СУПЕР-ПРИЗ/);
+  assert.equal((elements.caseConfetti.innerHTML.match(/<i style=/g) || []).length, 52);
+});
