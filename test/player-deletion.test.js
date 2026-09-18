@@ -20,7 +20,15 @@ test('delete controls are in the manager roster, not the public team list', () =
   assert.ok(!publicTeam.includes('deletePlayer('));
   assert.ok(page.includes("['roster','Состав команды']"));
   assert.ok(page.includes('function settingsRosterView(){'));
-  assert.ok(page.includes("if(tab!=='settings'||settingsSection!=='roster'||!adminWrite())return;"));
+  assert.ok(page.includes("if(!settingsOpen||settingsSection!=='roster'||!adminWrite())return;"));
+});
+
+test('settings open above the current page and closing them ends the manager session', () => {
+  assert.ok(page.includes('<dialog id="settingsDialog"'));
+  assert.ok(page.includes('body.innerHTML=settingsView();if(!dialog.open)dialog.showModal()'));
+  assert.ok(page.includes("if(id==='settings'){if(settingsOpen)return;settingsOpen=true;renderSettingsModal();void checkAdmin();return}"));
+  assert.ok(page.includes('if(await adminLogout(false)===false)return false;settingsOpen=false;'));
+  assert.ok(page.includes('oncancel="event.preventDefault();closeSettings()"'));
 });
 
 test('each player deletion requires the manager session, including consecutive deletions', () => {
