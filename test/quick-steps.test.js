@@ -107,3 +107,7 @@ test('field controls omit the selected player balance and helper captions', () =
   assert.match(view, /Кнопки/);
   assert.doesNotMatch(view, /в запасе|Накоплено|Дополнительные действия/);
 });
+
+test('confirmation button keeps its centered transform on hover', () => {
+  assert.match(html, /\.quick-confirm:hover:not\(:disabled\)\{transform:translate\(-50%,-50%\)/);
+});
