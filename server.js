@@ -5,6 +5,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { CASE_COST, MINI_PRIZES, SUPER_CHEST_CHANCE, casePool, drawCaseOutcome, createChestRound } from './case.js';
 import { publicUpdateValid } from './game-integrity.js';
 import { normalizeSalesName, parseSalesNotification } from './telegram-actions.js';
+import { FOMENKO_ALIASES, TEAM_ROSTERS, TELEGRAM_NAME_OVERRIDES } from './team-rosters.js';
 
 const { Pool } = pg;
 const app = express();
@@ -215,6 +216,82 @@ const pool = new Pool({
 // The original single-team game uses id 1, so its saved progress stays with Fomenko.
 const teamIds = Object.freeze({ fomenko: 1, lvovsky: 2, shabanov: 3, kozhanov: 4, otrakusha: 5, kulikov: 6, kondratyev: 7, chekhova: 8, klimentovich: 9, bagaturiya: 10, tolstov: 11 });
 const teamNames = Object.freeze({ fomenko: 'Фоменко', lvovsky: 'Львовский', shabanov: 'Шабанов', kozhanov: 'Кожанов', otrakusha: 'Отрокуша', kulikov: 'Куликов', kondratyev: 'Кондратьев', chekhova: 'Чехова', klimentovich: 'Климентович', bagaturiya: 'Багатурия', tolstov: 'Толстов' });
+const PLAYER_COLORS = Object.freeze(['#286653','#cf744d','#6976b3','#af5980','#a19036','#448e9e','#795c9b','#6f8746']);
+const ROSTER_MIGRATION = '2026-09-20-department-rosters-v1';
+
+function blankPlayer(name, index) {
+  return { id: randomUUID(), name, salesName: TELEGRAM_NAME_OVERRIDES[name] || name, color: PLAYER_COLORS[index % PLAYER_COLORS.length], sport: 7,
+    pos: 0, bank: 0, cash: 0, cashBase: 0, calls: 0, cross: 0, shields: 0, high: 0, used: [], actionCounts: {} };
+}
+
+function blankGame(catalog, rules) {
+  return { version: 3, id: randomUUID(), updated: new Date().toISOString(), config: {
+    period: 'Второй период', cashUnit: rules.cashUnit, callUnit: 100, crossSteps: rules.crossSteps,
+    milestones: [1, 1, 1, 1, 2], shop: catalog, actions: rules.actions, challenges: rules.challenges
+  }, players: [], logs: [], rewards: [], ledger: [], undo: null };
+}
+
+function applyRoster(game, teamKey, names) {
+  const next = structuredClone(game), existing = Array.isArray(next.players) ? next.players : [];
+  const unused = new Set(existing);
+  next.players = names.map((name, index) => {
+    const aliases = teamKey === 'fomenko' ? (FOMENKO_ALIASES[name] || []) : [];
+    const player = existing.find(item => unused.has(item) && [name, ...aliases].some(candidate => normalizeSalesName(item.name) === normalizeSalesName(candidate)));
+    if (!player) return blankPlayer(name, index);
+    unused.delete(player);
+    const updated = { ...player, name, salesName: TELEGRAM_NAME_OVERRIDES[name] || name, sport: 7 };
+    delete updated.avatar;
+    return updated;
+  });
+  // Preserve an unlisted participant only when removing them would destroy recorded progress or rewards.
+  for (const player of unused) {
+    const used = player.pos || player.high || player.bank || player.cash || player.calls || player.cross ||
+      Object.values(player.actionCounts || {}).some(Boolean) || next.ledger?.some(item => item.playerId === player.id) ||
+      next.rewards?.some(item => item.playerId === player.id);
+    if (used) next.players.push({ ...player, sport: 7, avatar: undefined });
+  }
+  const now = new Date().toISOString();
+  next.updated = now;
+  next.undo = null;
+  next.logs = Array.isArray(next.logs) ? next.logs : [];
+  next.logs.unshift({ id: randomUUID(), at: now, text: `Состав команды обновлён по списку отдела: ${names.length} менеджеров, всем установлен Робот-чемпион.` });
+  return next;
+}
+
+async function seedDepartmentRosters(catalog, rules) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const claimed = await client.query(
+      'INSERT INTO app_migrations (id) VALUES ($1) ON CONFLICT DO NOTHING RETURNING id',
+      [ROSTER_MIGRATION]
+    );
+    if (!claimed.rows.length) {
+      await client.query('ROLLBACK');
+      return;
+    }
+    for (const [teamKey, names] of Object.entries(TEAM_ROSTERS)) {
+      const id = teamIds[teamKey];
+      const current = await client.query('SELECT data FROM game_state WHERE id = $1 FOR UPDATE', [id]);
+      const game = current.rows[0]?.data ?? blankGame(catalog, rules);
+      const next = applyRoster(game, teamKey, names);
+      await client.query(`
+        INSERT INTO game_state (id, data, updated_at) VALUES ($1, $2::jsonb, now())
+        ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = EXCLUDED.updated_at
+      `, [id, JSON.stringify(next)]);
+      for (const player of next.players) if (player.salesName) await client.query(`
+        UPDATE telegram_action_credits SET team_id = $1, player_id = $2, status = 'pending'
+        WHERE status = 'unmatched' AND normalized_name = $3
+      `, [id, player.id, normalizeSalesName(player.salesName)]);
+    }
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+}
 function teamId(req, res) {
   const key = req.query.team ?? 'fomenko';
   if (typeof key !== 'string' || !Object.hasOwn(teamIds, key)) {
@@ -275,6 +352,7 @@ function ensureTable() {
       `);
       await pool.query(`CREATE TABLE IF NOT EXISTS department_shop (id integer PRIMARY KEY CHECK (id = 1), data jsonb NOT NULL)`);
       await pool.query(`CREATE TABLE IF NOT EXISTS department_rules (id integer PRIMARY KEY CHECK (id = 1), data jsonb NOT NULL)`);
+      await pool.query(`CREATE TABLE IF NOT EXISTS app_migrations (id text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())`);
       await pool.query(`
         CREATE TABLE IF NOT EXISTS telegram_action_credits (
           id bigserial PRIMARY KEY,
@@ -316,6 +394,7 @@ function ensureTable() {
       const catalog = completeShop(catalogResult.rows[0].data);
       if (!validShop(catalog)) throw new Error('INVALID_SHOP_CATALOG');
       await pool.query('UPDATE department_shop SET data = $1::jsonb WHERE id = 1', [JSON.stringify(catalog)]);
+      await seedDepartmentRosters(catalog, currentRules);
       for (const item of catalog.filter(item => item.superPrize)) {
         const id = item.id;
         await pool.query(`
