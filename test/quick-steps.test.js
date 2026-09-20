@@ -11,17 +11,38 @@ assert.ok(start >= 0 && end > start);
 function setup() {
   const player = { name: 'Оля', bank: 0, cash: 0, cross: 0, calls: 0, actionCounts: {} };
   const messages = [], animations = [];
+  const confirmFields = { label: { textContent: '' }, gain: { textContent: '' } };
+  const confirmButton = {
+    hidden: true, style: {}, offsetWidth: 100,
+    classList: { add() {}, remove() {} }, focus() {},
+    querySelector: selector => selector.includes('label') ? confirmFields.label : confirmFields.gain
+  };
   const context = {
     state: { config: { actions: [] } }, pnow: () => player, writable: () => true,
     esc: value => String(value),
     day: () => '2026-09-18', actionAnchor: () => ({ left: 10, top: 10, width: 50 }),
     snapshot: () => {}, commit: () => {}, log: text => messages.push(text), toast: text => messages.push(text),
-    showEarnedPop: (amount, icon) => animations.push({ amount, icon })
+    showEarnedPop: (amount, icon) => animations.push({ amount, icon }),
+    document: { getElementById: id => id === 'quickConfirm' ? confirmButton : null },
+    setTimeout: () => 1, clearTimeout: () => {}, innerWidth: 1200, innerHeight: 800
   };
   vm.createContext(context);
   vm.runInContext(html.slice(start, end), context);
-  return { context, player, messages, animations };
+  return { context, player, messages, animations, confirmButton, confirmFields };
 }
+
+test('quick action requires a second click before steps are credited', () => {
+  const { context, player, confirmButton, confirmFields } = setup();
+  context.requestQuickStep('cashMid');
+  assert.equal(player.bank, 0);
+  assert.equal(confirmButton.hidden, false);
+  assert.equal(confirmFields.label.textContent, 'Оплата от 50 000 до 99 999 ₽');
+  assert.match(confirmFields.gain.textContent, /\+2 шаг/);
+  context.confirmQuickStep();
+  assert.equal(player.bank, 2);
+  assert.equal(player.actionCounts['payment-mid'], 1);
+  assert.equal(confirmButton.hidden, true);
+});
 
 test('quick buttons credit calibrated steps without inventing cash amounts or direct coins', () => {
   const { context, player, animations } = setup();
@@ -70,6 +91,8 @@ test('game field shows six direct buttons instead of amount inputs', () => {
   assert.match(view, /5 шагов/);
   assert.doesNotMatch(view, /👟|Всего оплат|учтено дней|Всего кросс-сейлов|Дополнительные действия/);
   assert.doesNotMatch(view, /type="number"/);
+  assert.equal((view.match(/onclick="requestQuickStep/g) || []).length, 6);
+  assert.doesNotMatch(view, /onclick="creditQuickStep/);
 });
 
 test('field controls omit the selected player balance and helper captions', () => {
