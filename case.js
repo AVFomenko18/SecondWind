@@ -15,11 +15,11 @@ export const MINI_PRIZES = Object.freeze([
   { id: 'mini-meeting-shield', name: 'Щит от переноса встречи', icon: '🛡️' },
   { id: 'mini-needs-lens', name: 'Лупа скрытой потребности', icon: '🔍' },
   { id: 'mini-client-boomerang', name: 'Бумеранг пропавшего клиента', icon: '🪃' },
-  { id: 'mini-warm-lead-lantern', name: 'Фонарь тёплого лида', icon: '🏮' },
+  { id: 'mini-warm-lead-lantern', name: 'Фонарь горячего лида', icon: '🏮' },
   { id: 'mini-next-call-key', name: 'Ключ к следующему созвону', icon: '🗝️' },
-  { id: 'mini-timing-watch', name: 'Часы удачного касания', icon: '⏱️' },
-  { id: 'mini-pitch-cloak', name: 'Плащ уверенного питча', icon: '🦸' },
-  { id: 'mini-offer-die', name: 'Кубик удачного оффера', icon: '🎲' }
+  { id: 'mini-timing-watch', name: 'Часы быстрой оплаты', icon: '⏱️' },
+  { id: 'mini-pitch-cloak', name: 'Плащ уверенной презентации', icon: '🦸' },
+  { id: 'mini-offer-die', name: 'Кубик удачного распределения', icon: '🎲' }
 ]);
 
 export function caseWeight(item) {
