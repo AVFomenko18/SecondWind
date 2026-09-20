@@ -1,7 +1,7 @@
 import { randomInt } from 'node:crypto';
 
 export const CASE_COST = 2;
-export const SUPER_CHEST_CHANCE = 0.04;
+export const SUPER_CHEST_CHANCE = 0.045;
 export const SOUVENIR_SECTORS = 3;
 export const MINI_PRIZES = Object.freeze([
   { id: 'mini-bank-charm', name: 'Оберег от отказов банка', icon: '🧿' },

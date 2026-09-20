@@ -28,11 +28,11 @@ test('sold-out and disabled prizes cannot be drawn', () => {
   assert.equal(drawCasePrize([], () => 0), null);
 });
 
-test('four percent of eligible case openings enter the chest round', () => {
+test('four and a half percent of eligible case openings enter the chest round', () => {
   const items = casePool(shop, [{ prize_id: 'rare', purchased: 0, limit_count: 5 }]);
-  assert.equal(SUPER_CHEST_CHANCE, 0.04);
-  assert.equal(drawCaseOutcome(items, max => max === 1000 ? 39 : 0).phase, 'chests');
-  assert.equal(drawCaseOutcome(items, max => max === 1000 ? 40 : 0).phase, 'reward');
+  assert.equal(SUPER_CHEST_CHANCE, 0.045);
+  assert.equal(drawCaseOutcome(items, max => max === 1000 ? 44 : 0).phase, 'chests');
+  assert.equal(drawCaseOutcome(items, max => max === 1000 ? 45 : 0).phase, 'reward');
   assert.equal(drawCaseOutcome(casePool(shop, [{ prize_id: 'rare', purchased: 5, limit_count: 5 }]), () => 0).phase, 'reward');
 });
 
