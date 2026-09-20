@@ -38,8 +38,10 @@ function setup() {
     teamId: () => 1, sameOrigin: () => true, withDepartmentConfig: value => value, stateETag: () => '"etag"',
     casePool: () => [{ id: 'super', name: 'Day off', superPrize: true, weight: 20 }],
     drawCaseOutcome: () => ({ phase: 'chests', prize: { id: 'super', name: 'Day off', superPrize: true } }),
-    createChestRound: () => ({ position: 1, prize: { id: 'super', name: 'Day off' }, miniPrizes: [
-      { id: 'mini-1', name: 'Зелье дозвона' }, { id: 'mini-2', name: 'Молот возражений' }
+    createChestRound: () => ({ position: 1, prize: { id: 'super', name: 'Day off' }, chests: [
+      { type: 'souvenir', prize: { id: 'mini-1', name: 'Зелье дозвона' } },
+      { type: 'super', prize: { id: 'super', name: 'Day off' } },
+      { type: 'ordinary', prize: { id: 'ordinary-1', name: 'Обед 1,5 часа' } }
     ] }),
     randomUUID: () => 'log-id', CASE_COST: 2, structuredClone,
     databaseError: (_res, error) => { throw error; }
@@ -70,7 +72,7 @@ test('opening a super sector reserves stock without revealing the winning chest'
   assert.equal(database.game.ledger.at(-1).amount, -2);
 });
 
-test('wrong chest gives a mini prize and releases reserved stock', async () => {
+test('souvenir chest gives a souvenir and releases reserved stock', async () => {
   const { handlers, database, requestId, request, response } = setup();
   await handlers['/api/open-case'](request({ playerId: 'player-1', requestId }), response());
   const choice = response();
@@ -78,6 +80,7 @@ test('wrong chest gives a mini prize and releases reserved stock', async () => {
   assert.equal(choice.statusCode, 200);
   assert.equal(choice.data.reward.title, 'Зелье дозвона');
   assert.equal(choice.data.reward.miniPrize, true);
+  assert.equal(choice.data.reward.souvenir, true);
   assert.equal(database.stock.purchased, 0);
   assert.equal(database.game.pendingCase, undefined);
   assert.equal(database.game.rewards.length, 1);
@@ -85,6 +88,21 @@ test('wrong chest gives a mini prize and releases reserved stock', async () => {
   await handlers['/api/choose-chest'](request({ requestId, chest: 2 }), retry);
   assert.equal(retry.data.reward.title, 'Зелье дозвона');
   assert.equal(database.game.rewards.length, 1);
+});
+
+test('ordinary chest gives an ordinary reward and releases reserved stock', async () => {
+  const { handlers, database, requestId, request, response } = setup();
+  await handlers['/api/open-case'](request({ playerId: 'player-1', requestId }), response());
+  const choice = response();
+  await handlers['/api/choose-chest'](request({ requestId, chest: 2 }), choice);
+  assert.equal(choice.data.reward.title, 'Обед 1,5 часа');
+  assert.equal(choice.data.reward.superPrize, false);
+  assert.equal(choice.data.reward.miniPrize, false);
+  assert.equal(choice.data.reward.souvenir, false);
+  assert.equal(choice.data.reveal[0].type, 'souvenir');
+  assert.equal(choice.data.reveal[1].type, 'super');
+  assert.equal(choice.data.reveal[2].type, 'ordinary');
+  assert.equal(database.stock.purchased, 0);
 });
 
 test('correct chest awards the reserved super prize', async () => {

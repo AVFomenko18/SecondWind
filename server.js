@@ -470,7 +470,7 @@ app.post('/api/open-case', async (req, res) => {
     const at = new Date().toISOString();
     let reward = null;
     if (outcome.phase === 'chests') {
-      const round = createChestRound(prize);
+      const round = createChestRound(prize, items.filter(item => !item.superPrize));
       await client.query('INSERT INTO case_rounds (team_id, request_id, player_id, data) VALUES ($1, $2, $3, $4::jsonb)',
         [id, requestId, playerId, JSON.stringify(round)]);
       next.pendingCase = { requestId, playerId, at };
@@ -539,17 +539,22 @@ app.post('/api/choose-chest', async (req, res) => {
       return res.status(409).json({ error: 'Участник кейса не найден.' });
     }
     const round = saved.data;
-    const superPrize = chest === round.position;
-    const consolation = superPrize ? null : round.miniPrizes[chest < round.position ? chest : chest - 1];
+    const legacyChest = index => index === round.position
+      ? { type: 'super', prize: round.prize }
+      : { type: 'souvenir', prize: round.miniPrizes[index < round.position ? index : index - 1] };
+    const chestResult = Array.isArray(round.chests) ? round.chests[chest] : legacyChest(chest);
+    const superPrize = chestResult.type === 'super';
     if (!superPrize) {
       await client.query('UPDATE super_prize_inventory SET purchased = GREATEST(0, purchased - 1) WHERE prize_id = $1', [round.prize.id]);
     }
-    const prize = superPrize ? round.prize : consolation;
+    const prize = chestResult.prize;
+    const souvenir = chestResult.type === 'souvenir';
     const reward = { id: requestId, playerId: saved.player_id, prizeId: prize.id, title: prize.name, cost: CASE_COST,
-      source: 'shop', superPrize, miniPrize: !superPrize, case: true, claimed: false, cancelled: false, at: before.pendingCase.at };
-    const reveal = [0, 1, 2].map(index => index === round.position
-      ? { title: round.prize.name, superPrize: true }
-      : { title: round.miniPrizes[index < round.position ? index : index - 1].name, superPrize: false });
+      source: 'shop', superPrize, miniPrize: souvenir, souvenir, case: true, claimed: false, cancelled: false, at: before.pendingCase.at };
+    const reveal = [0, 1, 2].map(index => {
+      const result = Array.isArray(round.chests) ? round.chests[index] : legacyChest(index);
+      return { title: result.prize.name, type: result.type, superPrize: result.type === 'super' };
+    });
     const next = structuredClone(before);
     delete next.pendingCase;
     next.rewards.push(reward);
@@ -557,7 +562,7 @@ app.post('/api/choose-chest', async (req, res) => {
     if (purchase) purchase.title = `Кейс: ${reward.title}`;
     const at = new Date().toISOString();
     next.logs.unshift({ id: randomUUID(), at,
-      text: `${player.name}: выбрал(а) шкатулку №${chest + 1} и получил(а) «${reward.title}»${superPrize ? ' · СУПЕР-ПРИЗ!' : ' · мини-приз'}.` });
+      text: `${player.name}: выбрал(а) шкатулку №${chest + 1} и получил(а) «${reward.title}»${superPrize ? ' · СУПЕР-ПРИЗ!' : souvenir ? ' · сувенир' : ' · награда за спортивные заслуги'}.` });
     next.updated = at;
     next.undo = null;
     const resolution = { reward, reveal, selectedChest: chest };

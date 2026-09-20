@@ -36,13 +36,17 @@ test('four percent of eligible case openings enter the chest round', () => {
   assert.equal(drawCaseOutcome(casePool(shop, [{ prize_id: 'rare', purchased: 5, limit_count: 5 }]), () => 0).phase, 'reward');
 });
 
-test('a chest round has one super prize and two distinct mini prizes', () => {
+test('a chest round has one super prize, one souvenir and one ordinary prize', () => {
   assert.equal(MINI_PRIZES.length, 16);
   assert.equal(new Set(MINI_PRIZES.map(item => item.id)).size, MINI_PRIZES.length);
-  const round = createChestRound({ id: 'rare', name: 'Выходной' }, max => max - 1);
+  const ordinary = casePool(shop, [{ prize_id: 'rare', purchased: 0, limit_count: 5 }]).filter(item => !item.superPrize);
+  const round = createChestRound({ id: 'rare', name: 'Выходной' }, ordinary, max => max - 1);
   assert.equal(round.position, 2);
   assert.equal(round.prize.id, 'rare');
-  assert.equal(new Set(round.miniPrizes.map(item => item.id)).size, 2);
+  assert.deepEqual(round.chests.map(item => item.type).sort(), ['ordinary', 'souvenir', 'super']);
+  assert.equal(round.chests[2].prize.id, 'rare');
+  assert.equal(round.chests.find(item => item.type === 'souvenir').prize.id, MINI_PRIZES.at(-1).id);
+  assert.equal(round.chests.find(item => item.type === 'ordinary').prize.id, 'standard');
 });
 
 test('three souvenir sectors award a random souvenir without changing super chest odds', () => {

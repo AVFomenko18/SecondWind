@@ -44,7 +44,7 @@ export function drawCaseOutcome(items, drawRandom = randomInt) {
   const ordinary = items.filter(item => !item.superPrize);
   const superPrizes = items.filter(item => item.superPrize);
   if (!ordinary.length && !superPrizes.length) return null;
-  const chestRound = superPrizes.length && drawRandom(1000) < SUPER_CHEST_CHANCE * 1000;
+  const chestRound = superPrizes.length && ordinary.length && drawRandom(1000) < SUPER_CHEST_CHANCE * 1000;
   if (chestRound) return { phase: 'chests', prize: drawCasePrize(superPrizes, drawRandom) };
   const ordinaryWeight = ordinary.reduce((sum, item) => sum + item.weight, 0);
   const souvenirWeight = ordinaryWeight ? ordinaryWeight * 4 : SOUVENIR_SECTORS;
@@ -56,10 +56,18 @@ export function drawCaseOutcome(items, drawRandom = randomInt) {
     : { phase: 'reward', prize: drawn };
 }
 
-export function createChestRound(prize, drawRandom = randomInt) {
+export function createChestRound(prize, ordinaryPrizes, drawRandom = randomInt) {
+  if (!ordinaryPrizes.length) throw new Error('A chest round requires an ordinary prize');
   const position = drawRandom(3);
-  const first = drawRandom(MINI_PRIZES.length);
-  const secondDraw = drawRandom(MINI_PRIZES.length - 1);
-  const second = secondDraw >= first ? secondDraw + 1 : secondDraw;
-  return { position, prize: { id: prize.id, name: prize.name }, miniPrizes: [MINI_PRIZES[first], MINI_PRIZES[second]] };
+  const openPositions = [0, 1, 2].filter(index => index !== position);
+  const souvenirPosition = openPositions.splice(drawRandom(2), 1)[0];
+  const ordinaryPosition = openPositions[0];
+  const superPrize = { id: prize.id, name: prize.name };
+  const souvenir = MINI_PRIZES[drawRandom(MINI_PRIZES.length)];
+  const ordinary = drawCasePrize(ordinaryPrizes, drawRandom);
+  const chests = [];
+  chests[position] = { type: 'super', prize: superPrize };
+  chests[souvenirPosition] = { type: 'souvenir', prize: souvenir };
+  chests[ordinaryPosition] = { type: 'ordinary', prize: { id: ordinary.id, name: ordinary.name } };
+  return { position, prize: superPrize, chests };
 }
