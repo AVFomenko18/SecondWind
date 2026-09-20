@@ -23,6 +23,8 @@ function setup() {
     day: () => '2026-09-18', actionAnchor: () => ({ left: 10, top: 10, width: 50 }),
     snapshot: () => {}, commit: () => {}, log: text => messages.push(text), toast: text => messages.push(text),
     showEarnedPop: (amount, icon) => animations.push({ amount, icon }),
+    salesActionLocked: () => false, salesCreditsConfigured: false, salesCredits: {},
+    salesCreditCount: () => 0,
     document: { getElementById: id => id === 'quickConfirm' ? confirmButton : null },
     setTimeout: () => 1, clearTimeout: () => {}, innerWidth: 1200, innerHeight: 800
   };

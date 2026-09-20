@@ -4,6 +4,7 @@ import { createHmac, createHash, randomUUID, timingSafeEqual } from 'node:crypto
 import { isDeepStrictEqual } from 'node:util';
 import { CASE_COST, MINI_PRIZES, SUPER_CHEST_CHANCE, casePool, drawCaseOutcome, createChestRound } from './case.js';
 import { publicUpdateValid } from './game-integrity.js';
+import { normalizeSalesName, parseSalesNotification } from './telegram-actions.js';
 
 const { Pool } = pg;
 const app = express();
@@ -223,6 +224,22 @@ function teamId(req, res) {
   return teamIds[key];
 }
 
+function telegramConfigured() {
+  return Boolean(process.env.TELEGRAM_WEBHOOK_SECRET && process.env.TELEGRAM_CHAT_ID && process.env.TELEGRAM_SOURCE_BOT_ID);
+}
+
+function salesActionDeltas(before, after) {
+  const keys = [['cashLow', 'payment-low'], ['cashMid', 'payment-mid'], ['cashHigh', 'payment-high']];
+  const changes = [];
+  for (const player of after?.players || []) {
+    const old = before?.players?.find(item => item.id === player.id);
+    if (!old) continue;
+    for (const [kind, key] of keys) for (let count = 0; count < (player.actionCounts?.[key] || 0) - (old.actionCounts?.[key] || 0); count++) changes.push({ kind, playerId: player.id });
+    for (let count = 0; count < player.cross - old.cross; count++) changes.push({ kind: 'cross', playerId: player.id });
+  }
+  return changes;
+}
+
 let tableReady;
 function ensureTable() {
   if (!process.env.DATABASE_URL) {
@@ -258,6 +275,25 @@ function ensureTable() {
       `);
       await pool.query(`CREATE TABLE IF NOT EXISTS department_shop (id integer PRIMARY KEY CHECK (id = 1), data jsonb NOT NULL)`);
       await pool.query(`CREATE TABLE IF NOT EXISTS department_rules (id integer PRIMARY KEY CHECK (id = 1), data jsonb NOT NULL)`);
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS telegram_action_credits (
+          id bigserial PRIMARY KEY,
+          chat_id text NOT NULL,
+          message_id bigint NOT NULL,
+          source_bot_id text NOT NULL,
+          manager_name text NOT NULL,
+          normalized_name text NOT NULL,
+          action_kind text NOT NULL CHECK (action_kind IN ('cashLow','cashMid','cashHigh','cross')),
+          amount bigint NOT NULL CHECK (amount > 0),
+          team_id integer,
+          player_id text,
+          status text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','unmatched','consumed')),
+          raw_text text NOT NULL,
+          created_at timestamptz NOT NULL DEFAULT now(),
+          consumed_at timestamptz,
+          UNIQUE (chat_id, message_id)
+        )
+      `);
       let rulesResult = await pool.query('SELECT data FROM department_rules WHERE id = 1');
       if (!rulesResult.rows.length) {
         const fomenkoRules = await pool.query('SELECT data->\'config\' AS config FROM game_state WHERE id = 1');
@@ -370,6 +406,61 @@ app.get('/api/prize-stock', async (_req, res) => {
     const remaining = Object.fromEntries(Object.entries(limits)
       .map(([id, limit]) => [id, Math.max(0, limit - (purchased[id] || 0))]));
     res.json({ remaining, limits, shop });
+  } catch (error) {
+    databaseError(res, error);
+  }
+});
+
+app.post('/api/telegram/webhook', async (req, res) => {
+  if (!telegramConfigured()) return res.status(503).json({ error: 'Интеграция Telegram ещё не настроена.' });
+  const suppliedSecret = req.get('x-telegram-bot-api-secret-token') || '';
+  if (!equalSecret(suppliedSecret, process.env.TELEGRAM_WEBHOOK_SECRET)) return res.status(403).json({ error: 'Неверный секрет webhook.' });
+  const message = req.body?.message ?? req.body?.channel_post;
+  if (!message || String(message.chat?.id) !== String(process.env.TELEGRAM_CHAT_ID) ||
+      String(message.from?.id) !== String(process.env.TELEGRAM_SOURCE_BOT_ID) || message.from?.is_bot !== true) return res.json({ ok: true });
+  const rawText = message.text ?? message.caption;
+  const parsed = parseSalesNotification(rawText);
+  if (!parsed) return res.json({ ok: true, recognized: false });
+  try {
+    await ensureTable();
+    const games = await pool.query('SELECT id, data FROM game_state WHERE id = ANY($1::int[])', [Object.values(teamIds)]);
+    const matches = [];
+    for (const row of games.rows) for (const player of Array.isArray(row.data?.players) ? row.data.players : []) {
+      if (player.salesName && normalizeSalesName(player.salesName) === parsed.normalizedName) matches.push({ teamId: Number(row.id), playerId: player.id });
+    }
+    const match = matches.length === 1 ? matches[0] : null;
+    await pool.query(`
+      INSERT INTO telegram_action_credits
+        (chat_id, message_id, source_bot_id, manager_name, normalized_name, action_kind, amount, team_id, player_id, status, raw_text)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+      ON CONFLICT (chat_id, message_id) DO NOTHING
+    `, [String(message.chat.id), message.message_id, String(message.from.id), parsed.managerName, parsed.normalizedName,
+      parsed.kind, parsed.amount, match?.teamId ?? null, match?.playerId ?? null, match ? 'pending' : 'unmatched', rawText]);
+    res.json({ ok: true, recognized: true, matched: Boolean(match) });
+  } catch (error) {
+    databaseError(res, error);
+  }
+});
+
+app.get('/api/action-credits', async (req, res) => {
+  const id = teamId(req, res);
+  if (id === null) return;
+  if (!telegramConfigured()) return res.json({ configured: false, credits: {} });
+  try {
+    await ensureTable();
+    const result = await pool.query(`
+      SELECT player_id, action_kind, COUNT(*)::integer AS count
+      FROM telegram_action_credits
+      WHERE team_id = $1 AND status = 'pending'
+      GROUP BY player_id, action_kind
+    `, [id]);
+    const credits = {};
+    for (const row of result.rows) {
+      credits[row.player_id] ??= {};
+      credits[row.player_id][row.action_kind] = Number(row.count);
+    }
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ configured: true, credits });
   } catch (error) {
     databaseError(res, error);
   }
@@ -643,11 +734,30 @@ app.post('/api/game-state', async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(422).json({ error: 'Игровые шаги, монетки и награды не совпадают с выполненными действиями.' });
     }
-    if (!Array.isArray(req.body?.players) || req.body.players.some(player => player?.avatar !== undefined &&
-        (typeof player.avatar !== 'string' || player.avatar.length > 300000 ||
-          !/^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(player.avatar)))) {
+    const salesActions = salesActionDeltas(before, req.body);
+    if (telegramConfigured()) for (const salesAction of salesActions) {
+      const credit = await client.query(`
+        WITH chosen AS (
+          SELECT id FROM telegram_action_credits
+          WHERE team_id = $1 AND player_id = $2 AND action_kind = $3 AND status = 'pending'
+          ORDER BY created_at, id FOR UPDATE SKIP LOCKED LIMIT 1
+        )
+        UPDATE telegram_action_credits AS credit
+        SET status = 'consumed', consumed_at = now()
+        FROM chosen WHERE credit.id = chosen.id
+        RETURNING credit.id
+      `, [id, salesAction.playerId, salesAction.kind]);
+      if (!credit.rows.length) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ error: 'Для этого действия нет нового подтверждения из чата продаж.' });
+      }
+    }
+    if (!Array.isArray(req.body?.players) || req.body.players.some(player =>
+        (player?.salesName !== undefined && (typeof player.salesName !== 'string' || player.salesName.length > 120)) ||
+        (player?.avatar !== undefined && (typeof player.avatar !== 'string' || player.avatar.length > 300000 ||
+          !/^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(player.avatar))))) {
       await client.query('ROLLBACK');
-      return res.status(422).json({ error: 'Картинка персонажа повреждена или слишком велика.' });
+      return res.status(422).json({ error: 'Имя для Telegram или картинка персонажа заполнены неверно.' });
     }
     const requestedShop = req.body?.config?.shop;
     if (!validShop(requestedShop)) {
