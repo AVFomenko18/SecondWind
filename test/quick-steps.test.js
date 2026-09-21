@@ -59,20 +59,20 @@ test('quick buttons credit calibrated steps without inventing cash amounts or di
   assert.deepEqual(animations.map(item => item.amount), [1, 2, 4]);
 });
 
-test('activity is closed while cross-sale and three calls still credit calibrated steps', () => {
+test('activity is closed while cross-sale still credits calibrated steps', () => {
   const { context, player, messages } = setup();
   context.creditQuickStep('activity');
   context.creditQuickStep('activity');
   context.creditQuickStep('cross');
   context.creditQuickStep('powerCalls');
-  assert.equal(player.bank, 3.5);
+  assert.equal(player.bank, 2);
   assert.equal(player.actionCounts['activity-2026-09-18'], undefined);
   assert.equal(player.cross, 1);
-  assert.equal(player.calls, 3);
+  assert.equal(player.calls, 0);
   assert.ok(messages.some(text => text.includes('временно недоступна')));
 });
 
-test('game field shows six direct buttons instead of amount inputs', () => {
+test('game field shows payment, activity and cross-sale buttons without power calls', () => {
   const from = html.indexOf('function quickActionsView(){');
   const to = html.indexOf('function fieldControls(){', from);
   assert.ok(from >= 0 && to > from);
@@ -81,20 +81,18 @@ test('game field shows six direct buttons instead of amount inputs', () => {
   context.state.config.actions = [];
   vm.runInContext(html.slice(from, to), context);
   const view = context.quickActionsView();
-  assert.equal((view.match(/class="quick-step-button/g) || []).length, 6);
-  assert.match(view, /Три звонка с мощным дожимом/);
+  assert.equal((view.match(/class="quick-step-button/g) || []).length, 5);
+  assert.doesNotMatch(view, /Три звонка с мощным дожимом/);
   assert.match(view, /💳/);
   assert.match(view, /⚡/);
   assert.match(view, /🤝/);
-  assert.match(view, /☎️/);
   assert.match(view, /1 шаг/);
-  assert.match(view, /1,5 шага/);
   assert.match(view, /4 шага/);
   assert.match(view, /5 шагов/);
   assert.match(view, /Активность пока недоступна/);
   assert.doesNotMatch(view, /👟|Всего оплат|учтено дней|Всего кросс-сейлов|Дополнительные действия/);
   assert.doesNotMatch(view, /type="number"/);
-  assert.equal((view.match(/onclick="requestQuickStep/g) || []).length, 6);
+  assert.equal((view.match(/onclick="requestQuickStep/g) || []).length, 5);
   assert.doesNotMatch(view, /onclick="creditQuickStep/);
 });
 

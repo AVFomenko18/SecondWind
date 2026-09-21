@@ -4,7 +4,7 @@ const CHECKPOINT_EVERY = 6;
 const CHECKPOINT_COINS = 5;
 const LAP_COINS = 2;
 const COLORS = new Set(['#286653','#cf744d','#6976b3','#af5980','#a19036','#448e9e','#795c9b','#6f8746']);
-const STEPS = { 'payment-low': 1, 'payment-mid': 2, 'payment-high': 4, 'power-calls': 1.5 };
+const STEPS = { 'payment-low': 1, 'payment-mid': 2, 'payment-high': 4 };
 const ACTIVITY_ENABLED_NAMES = new Set([]);
 const integer = (value, min = 0, max = 1000000000) => Number.isSafeInteger(value) && value >= min && value <= max;
 const halfStep = value => Number.isFinite(value) && Number.isSafeInteger(value * 2);
@@ -65,10 +65,7 @@ function singleActionValid(before, after) {
     for (const key of new Set([...Object.keys(old.actionCounts || {}), ...Object.keys(player.actionCounts || {})])) {
       const delta = (player.actionCounts?.[key] ?? 0) - (old.actionCounts?.[key] ?? 0);
       if (!delta) continue;
-      if (key === 'power-calls') {
-        if (delta !== 1) return false;
-        // Calls and their action counter are one button press.
-      } else if (key.startsWith('activity-')) {
+      if (key.startsWith('activity-')) {
         actions++;
       } else if (Object.hasOwn(STEPS, key)) {
         if (delta !== 1) return false;
@@ -126,7 +123,7 @@ export function publicUpdateValid(before, after, verifyHistory = true) {
         player.pos < old.pos || player.high !== Math.max(old.high, player.pos) ||
         !halfStep(player.bank) || player.bank < 0 || player.bank > 100000000 ||
         !integer(player.cross) || !integer(player.calls) ||
-        player.calls !== old.calls + 3 * ((player.actionCounts['power-calls'] ?? 0) - (old.actionCounts?.['power-calls'] ?? 0)) ||
+        player.calls !== old.calls ||
         player.cross < old.cross) return false;
     const earned = earnedStepsForPlayer(old, player, before.config?.actions || []);
     if (earned === null || !halfStep(earned) || !Number.isSafeInteger(player.pos - old.pos) ||
