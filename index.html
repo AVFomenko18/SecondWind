@@ -93,7 +93,7 @@ body:not(.field-expanded) .arena-layout{grid-template-columns:380px minmax(0,1fr
 .case-super-icon{font-size:38px;line-height:1}.case-super-card strong{font:700 clamp(22px,2vw,29px)/1.12 Georgia,serif;overflow-wrap:anywhere}
 .case-super-stock{margin-top:auto;font-size:17px;font-weight:800;color:#ffe49b}.case-super-stock b{font:800 29px Georgia,serif}
 @media(max-width:600px){.case-super-grid{grid-template-columns:1fr}.case-super-card{min-height:160px}}
-.roster-metrics{grid-template-columns:repeat(3,minmax(0,1fr));gap:4px}.roster-metrics>div{padding:6px 2px}.roster-metrics strong{font-size:15px}.roster-metrics span{font-size:8px;margin-top:2px}
+.roster-metrics{grid-template-columns:repeat(3,minmax(0,1fr));gap:4px}.roster-metrics>div{padding:6px 2px}.roster-metrics strong{font-size:15px}.roster-metrics span{font-size:8px;margin-top:2px}.demo-case-panel{margin-top:24px}.demo-case-panel .case-controls{align-items:flex-start}.demo-case-note{margin:12px 0 0;color:#dce7ca;font-size:12px}.demo-case-panel button{min-width:190px}
 </style><style>
 header .header-team-navigation{display:flex;flex:1 1 500px;min-width:0;flex-direction:column;align-items:center;gap:11px}
 header .header-team-navigation .team-tabs{width:100%;flex:0 0 auto;justify-content:center}
@@ -167,7 +167,7 @@ historyTeam=TEAM_KEY;
 function renderTeamTabs(){document.querySelectorAll('.team-tab').forEach(link=>{const active=link.dataset.team===TEAM_KEY;link.classList.toggle('active',active);if(active)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current')});document.title='Спортивная драма · '+TEAM_NAMES[TEAM_KEY]}
 async function switchTeam(event,key){event.preventDefault();if(key===TEAM_KEY)return false;if(!TEAM_KEYS.includes(key))return false;if(saveTask&&await saveTask===false)return false;if(pendingSave&&await flushProgress()===false)return false;if(settingsOpen&&await closeSettings()===false)return false;const url=new URL(location.href);url.searchParams.set('team',key);location.assign(url.href);return false}
 let rewardFeedSignature='',rewardFeedLoading=false;
-let caseCatalog=null,caseCatalogError='',caseCatalogLoading=false,caseOpening=false,caseRequestId='',caseLastReward=null;
+let caseCatalog=null,caseCatalogError='',caseCatalogLoading=false,caseOpening=false,caseRequestId='',caseLastReward=null,demoCaseOpening=false,demoChestMode=false;
 let apiReady=false,apiLoading=false,saveError='',pendingSave=null,saveTask=null,apiETag=null,prizeStock=null,prizeStockError='',stockLoading=false,stockReload=false,lastSyncText='◌ Подключаемся к серверу…',lastSyncRetry=false,salesCreditsConfigured=null,salesCredits={};
 async function loadPrizeStock(){if(stockLoading){stockReload=true;return}stockLoading=true;prizeStockError='';try{const response=await fetch('/api/prize-stock',{credentials:'same-origin',cache:'no-store'});if(!response.ok)throw Error('Не удалось загрузить остаток супер-призов');const data=await response.json();if(!data?.remaining||typeof data.remaining!=='object')throw Error('Некорректный остаток супер-призов');prizeStock=data.remaining;if(Array.isArray(data.shop)&&state?.config){state.config.shop=data.shop}}catch(error){prizeStock=null;prizeStockError=error.message||'Не удалось загрузить остаток супер-призов'}finally{stockLoading=false;if(tab==='prizes'&&!caseOpening)render();if(stockReload){stockReload=false;void loadPrizeStock()}}}
 async function loadCaseCatalog(){
@@ -180,7 +180,7 @@ async function loadCaseCatalog(){
     if(!Array.isArray(data.items)||!Number.isSafeInteger(data.cost))throw Error('Некорректный состав кейса');
     caseCatalog=data;caseCatalogError='';
   }catch(error){caseCatalogError=error.message||'Нет связи с магазином';caseCatalog=null}
-  finally{caseCatalogLoading=false;if(tab==='prizes'&&!caseOpening)render()}
+  finally{caseCatalogLoading=false;if((tab==='prizes'&&!caseOpening)||(tab==='rules'&&!demoCaseOpening))render()}
 }
 function syncStatus(text,retry=false){lastSyncText=text;lastSyncRetry=retry;const status=document.getElementById('saveStatus');if(status)status.textContent=text;const button=document.getElementById('retrySync');if(button){button.hidden=!retry;button.disabled=apiLoading||Boolean(saveTask)}}
 async function apiRequest(options){const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),30000);try{return await fetch(GAME_STATE_API,{credentials:'same-origin',cache:'no-store',...options,signal:controller.signal})}finally{clearTimeout(timer)}}
@@ -320,13 +320,13 @@ function caseWheelEntries(items){
   while(hasSuper&&chestCount<3)entries.push({id:'chest-sector-'+chestCount++,name:'Супер-приз',superPrize:true,chestSector:true});
   return entries;
 }
-function caseWheelView(items){
+function caseWheelView(items,wheelId='caseWheelDisk'){
   const entries=caseWheelEntries(items);
   if(!entries.length)return '<div class="case-wheel-empty">Загружаем награды…</div>';
   const arc=360/entries.length;
   const gradient=entries.map((item,index)=>(item.chestSector?'#d5a54a':item.souvenirSector?'#a8c7a9':index%2?'#f0dfb5':'#fff4d7')+' '+(index*arc)+'deg '+((index+1)*arc)+'deg').join(',');
   const labels=entries.map((item,index)=>'<span class="case-wheel-label '+(item.chestSector?'super':'')+'" style="--angle:'+((index+.5)*arc)+'deg;--counter-angle:-'+((index+.5)*arc)+'deg" title="'+esc(item.name)+'"><span>'+caseIcon(item)+'</span><small>'+esc(item.name)+'</small></span>').join('');
-  return '<div class="case-wheel-stage"><div class="case-wheel-pointer" aria-hidden="true">▼</div><div class="case-wheel-disk" id="caseWheelDisk" style="background:conic-gradient('+gradient+')">'+labels+'<div class="case-wheel-hub">🎁<small>Бежим на<br>максимум</small></div></div></div>';
+  return '<div class="case-wheel-stage"><div class="case-wheel-pointer" aria-hidden="true">▼</div><div class="case-wheel-disk" id="'+wheelId+'" style="background:conic-gradient('+gradient+')">'+labels+'<div class="case-wheel-hub">🎁<small>Бежим на<br>максимум</small></div></div></div>';
 }
 function rewardDateTime(value){return new Date(value).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})}
 function rewardEntryView(r,i){
@@ -395,11 +395,13 @@ function finishCaseWheel(outcome){
 }
 function showChestDialog(){
   if(!state.pendingCase)return;
+  demoChestMode=false;
   const dialog=document.getElementById('chestDialog');
   if(dialog&&!dialog.open){document.getElementById('chestStatus').textContent='В шкатулках спрятаны супер-приз, сувенир и награда за спортивные заслуги.';dialog.querySelectorAll('button').forEach(button=>{button.disabled=false;button.classList.remove('revealed','chosen');button.innerHTML='<span aria-hidden="true">🗃️</span><small>Шкатулка '+(Number(button.dataset.chest)+1)+'</small>'});dialog.showModal()}
 }
 let chestChoosing=false;
 async function chooseChest(chest){
+  if(demoChestMode)return chooseDemoChest(chest);
   if(chestChoosing||!state.pendingCase||!Number.isSafeInteger(chest)||chest<0||chest>2)return;
   chestChoosing=true;
   const dialog=document.getElementById('chestDialog'),buttons=[...dialog.querySelectorAll('button[data-chest]')];
@@ -491,14 +493,48 @@ async function rollbackHistoryLog(index){
     if(historyTeam===key&&settingsOpen)await setHistoryTeam(key,true);
   }catch(error){if(historyTeam!==key)return;historyLoading=false;historyError=error.message||'Не удалось откатить историю команды.';renderSettingsModal();toast(historyError)}
 }
-function rulesView(){let c=state.config;return `<div class="panel wide"><h2>Правила «Спортивной драмы»</h2><p class="muted">Бежим на максимум. Один старт, общая трасса, личные кошельки монеток.</p><div class="grid2"><div class="rule"><b>01 / Зарабатываем шаги</b>Нажмите кнопку результата на игровом поле — шаги начислятся сразу.<br>Оплата меньше 50 000 ₽ — 1 шаг; от 50 000 до 99 999 ₽ — 2 шага; от 100 000 ₽ — 4 шага.<br>День с активностью от 70% — 5 шагов, один раз в день. Кросс-сейл — 2 шага. Три звонка с мощным дожимом — 1,5 шага.<br>Половинки шагов накапливаются. Для хода нужен минимум 1 целый шаг. Кнопки оплаты считают события по диапазонам, поэтому сумму кассы без точного значения не меняют.</div><div class="rule"><b>02 / Ходим по трассе</b>За один ход можно потратить любое целое количество накопленных шагов. Клетки без монетки — обычные, без дополнительных эффектов. После 60-й клетки начинается следующий круг; лишние шаги переходят в него. Финиша нет. Рубежи с монетками встречаются заново на каждом круге.</div><div class="rule"><b>03 / Получаем монетки</b>Каждая шестая клетка: +5 мон.<br>Полный круг (клетка 60): +2 мон.<br>Монетки выдаются и за остановку, и за прохождение, включая ускорение. Каждый рубеж оплачивается один раз на каждом круге. Повторный проход после отката не даёт дублирующих монет. Откаты не отнимают монетки.</div><div class="rule"><b>04 / Выполняем челленджи</b>Ведущий заранее задаёт условия и награду. После выполнения подтверждает результат с комментарием. Каждый челлендж доступен один раз за период каждому участнику. Заготовки выключены, пока вы не согласуете их условия.</div><div class="rule"><b>05 / Выбираем призы</b>Открытие кейса стоит 2 монетки. После прокрутки колеса выпадает награда; при супер-призе нужно выбрать одну из трёх шкатулок. Полученная награда появляется в списке ожидающих выдачи. Открытый кейс отменить нельзя.</div><div class="rule"><b>06 / Сохраняем прогресс</b>Новые данные сохраняются на сервере. Кнопки копирования скачивают резервные файлы; для работы игры нужен сайт с API. Действия после обновления можно откатить через историю до выбранного момента. Новый период сбрасывает результаты и кошельки: сначала сохраните копию. CRM не подключена — факты проверяет ведущий. Количество кругов не ограничено правилами. Игра продолжается, пока вы не начнёте новый период.</div></div><div class="notice">При переносе прежней игры сохранены позиции, шаги и призы. За уже пройденные рубежи начислено по 1 монетке. Старые оплаты не пересчитаны по новому курсу: новый накопитель кассы начинается с перехода на эту версию.</div><h3>Дополнительные действия</h3>${c.actions.map(a=>`<div class="log">${esc(a.name)} · ${a.unit} ед. = ${a.steps} шаг. ${a.enabled?'':'(выключено)'}</div>`).join('')||'<p class="muted">Пока не заданы — добавьте условия в настройках, когда определитесь.</p>'}</div>`}
+function demoCaseItems(){
+  const items=caseCatalog?.items||[];
+  if(items.some(item=>item.superPrize))return items;
+  return state.config.shop.filter(item=>item.enabled).map(item=>({...item,remaining:item.stockLimit||1}));
+}
+function spinDemoWheel(){
+  if(demoCaseOpening)return;
+  const items=demoCaseItems(),entries=caseWheelEntries(items),candidates=entries.map((item,index)=>item.chestSector?index:-1).filter(index=>index>=0);
+  if(!candidates.length)return toast('Демонстрационное колесо загружается. Попробуйте ещё раз.');
+  demoCaseOpening=true;render();
+  const wheel=document.getElementById('demoCaseWheelDisk'),button=document.getElementById('demoCaseButton'),result=document.getElementById('demoCaseResult');
+  const targetIndex=candidates[Math.floor(Math.random()*candidates.length)],target=360*8-(targetIndex+.5)*360/entries.length;
+  const done=()=>{if(!demoCaseOpening)return;demoCaseOpening=false;if(tab!=='rules')return;alignCaseWheelLabels(wheel,target);if(button){button.disabled=false;button.textContent='Крутить ещё раз'}if(result)result.textContent='Выпал супер-приз! Выберите одну из трёх шкатулок.';showDemoChestDialog()};
+  if(window.matchMedia('(prefers-reduced-motion: reduce)').matches){wheel.style.transform='rotate('+target+'deg)';done();return}
+  let settled=false;const finish=()=>{if(settled)return;settled=true;clearTimeout(timer);done()},timer=setTimeout(finish,10800);
+  wheel.addEventListener('transitionend',event=>{if(event.propertyName==='transform')finish()},{once:true});
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{wheel.classList.add('spinning');wheel.style.transform='rotate('+target+'deg)'}));
+}
+function showDemoChestDialog(){
+  const dialog=document.getElementById('chestDialog');if(!dialog)return;demoChestMode=true;
+  document.getElementById('chestStatus').textContent='Демонстрация: в выбранной шкатулке гарантирован супер-приз. Результат не сохраняется.';
+  dialog.querySelectorAll('button[data-chest]').forEach(button=>{button.disabled=false;button.classList.remove('revealed','chosen');button.innerHTML='<span aria-hidden="true">🗃️</span><small>Шкатулка '+(Number(button.dataset.chest)+1)+'</small>'});
+  if(!dialog.open)dialog.showModal();
+}
+function chooseDemoChest(chest){
+  if(chestChoosing||!Number.isSafeInteger(chest)||chest<0||chest>2)return;chestChoosing=true;
+  const dialog=document.getElementById('chestDialog'),buttons=[...dialog.querySelectorAll('button[data-chest]')],items=demoCaseItems();
+  const supers=items.filter(item=>item.superPrize),ordinary=items.filter(item=>!item.superPrize),minis=caseCatalog?.miniPrizes||[];
+  const superPrize=supers[Math.floor(Math.random()*supers.length)]||{name:'Супер-приз'},sport=ordinary[Math.floor(Math.random()*ordinary.length)]||{name:'Награда за спортивные заслуги'},mini=minis[Math.floor(Math.random()*minis.length)]||{name:'Сувенир'};
+  const reveal=[];reveal[chest]={type:'super',title:superPrize.name};reveal[(chest+1)%3]={type:'souvenir',title:mini.name};reveal[(chest+2)%3]={type:'ordinary',title:sport.name};
+  buttons.forEach((button,index)=>{button.disabled=true;button.classList.add('revealed');button.classList.toggle('chosen',index===chest);button.innerHTML='<span aria-hidden="true">'+(reveal[index].type==='super'?'✨':reveal[index].type==='souvenir'?'🎁':'🏅')+'</span><small>'+esc(reveal[index].title)+'</small>'});
+  document.getElementById('chestStatus').textContent='✨ Супер-приз найден! Это демонстрация: приз, монеты и лимиты не изменились.';
+  setTimeout(()=>{dialog.close();demoChestMode=false;chestChoosing=false;showCaseCelebration({title:superPrize.name,superPrize:true})},1900);
+}
+function rulesView(){const items=demoCaseItems();return `<div class="panel wide"><h2>Правила «Спортивной драмы»</h2><p class="muted">Бежим на максимум. Один старт, общая трасса, личные кошельки монеток.</p><div class="grid2"><div class="rule"><b>01 / Зарабатываем шаги</b>Нажмите кнопку результата на игровом поле — шаги начислятся сразу.<br>Оплата меньше 50 000 ₽ — 1 шаг; от 50 000 до 99 999 ₽ — 2 шага; от 100 000 ₽ — 4 шага.<br>День с активностью от 70% — 5 шагов, один раз в день. Кросс-сейл — 2 шага. Три звонка с мощным дожимом — 1,5 шага.<br>Половинки шагов накапливаются. Для хода нужен минимум 1 целый шаг.</div><div class="rule"><b>02 / Ходим по трассе</b>За один ход можно потратить любое целое количество накопленных шагов. После 60-й клетки начинается следующий круг; лишние шаги переходят в него. Количество кругов не ограничено.</div><div class="rule"><b>03 / Получаем монетки</b>Каждая шестая клетка: +5 мон.<br>Полный круг: +2 мон.<br>Монетки выдаются за прохождение контрольных точек и подтверждённые челленджи.</div><div class="rule"><b>04 / Выполняем челленджи</b>Ведущий заранее задаёт условия и награду. Каждый челлендж доступен один раз за период каждому участнику.</div><div class="rule"><b>05 / Выбираем призы</b>Открытие игрового колеса стоит 2 монетки. При попадании на супер-приз открываются три шкатулки — выберите одну и заберите выпавшую награду.</div></div><section class="case-panel demo-case-panel"><div class="case-controls"><div><span class="eyebrow">БЕСПЛАТНАЯ ДЕМОНСТРАЦИЯ</span><h3>🎡 Попробуйте колесо и шкатулки</h3><p class="demo-case-note">Здесь всегда выпадает супер-приз. Демонстрация не списывает монеты, не сохраняется в истории и не расходует лимиты наград.</p></div><button id="demoCaseButton" type="button" onclick="spinDemoWheel()" ${demoCaseOpening||!items.length?'disabled':''}>${demoCaseOpening?'Барабан вращается…':items.length?'Крутить бесплатно':'Загружаем колесо…'}</button></div>${caseWheelView(items,'demoCaseWheelDisk')}<div class="case-result super" id="demoCaseResult" role="status">${demoCaseOpening?'Барабан вращается…':'Пробный запуск — бесплатно'}</div></section></div>`}
 function economyLocked(){return sharedUsage.economyUsed||state.players.some(p=>p.cash>p.cashBase||p.calls||p.cross||Object.values(p.actionCounts).some(Boolean))}
 
 async function checkAdmin(){const revision=adminSessionRevision,wasAuthed=adminAuthed,wasConfigured=adminConfigured;try{const response=await fetch('/api/admin/session',{credentials:'same-origin',cache:'no-store'});const data=await response.json();if(revision!==adminSessionRevision)return;if(!data.authenticated)adminAuthed=false;adminConfigured=Boolean(data.configured)}catch{if(revision!==adminSessionRevision)return;adminAuthed=false}if(settingsOpen&&(wasAuthed!==adminAuthed||wasConfigured!==adminConfigured))renderSettingsModal()}
 async function loadSharedUsage(){try{const response=await fetch('/api/department-rules',{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(30000)});if(!response.ok)throw Error('Не удалось загрузить общие правила отдела.');const data=await response.json();if(!data.usage||!Array.isArray(data.usage.challengeIds)||!Array.isArray(data.usage.actionIds))throw Error('Некорректные общие правила отдела.');sharedUsage=data.usage}catch(error){toast(error.message||'Не удалось проверить общие правила отдела.')}}
 function renderSettingsModal(){const dialog=document.getElementById('settingsDialog'),body=document.getElementById('settingsBody');if(!settingsOpen){if(dialog.open)dialog.close();return}const scroll=body.scrollTop;body.innerHTML=settingsView();if(!dialog.open)dialog.showModal();body.scrollTop=scroll;if(!adminAuthed)body.querySelector('#adminPassword')?.focus()}
 async function closeSettings(){if(settingsClosing)return false;settingsClosing=true;try{if(await adminLogout(false)===false)return false;settingsOpen=false;document.getElementById('settingsDialog').close();render();document.getElementById('headerSettings').focus();return true}finally{settingsClosing=false}}
-async function openGameTab(id){if(id==='settings'){if(settingsOpen)return;settingsOpen=true;renderSettingsModal();void checkAdmin();return}if(settingsOpen&&await closeSettings()===false)return;tab=id;render();if(id==='prizes'){void loadPrizeStock();void loadCaseCatalog();if(state.pendingCase)showChestDialog()}}
+async function openGameTab(id){if(id==='settings'){if(settingsOpen)return;settingsOpen=true;renderSettingsModal();void checkAdmin();return}if(settingsOpen&&await closeSettings()===false)return;tab=id;render();if(id==='prizes'){void loadPrizeStock();void loadCaseCatalog();if(state.pendingCase)showChestDialog()}else if(id==='rules')void loadCaseCatalog()}
 function adminWrite(){if(!adminAuthed){toast('Откройте настройки и введите пароль руководителя.');return false}return writable()}
 async function adminLogin(event){event.preventDefault();if(adminLogoutTask)await adminLogoutTask;const password=document.getElementById('adminPassword').value,button=document.getElementById('adminLoginButton');button.disabled=true;try{const response=await fetch('/api/admin/login',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({password})});const data=await response.json();if(!response.ok)throw Error(data.error||'Не удалось войти');adminSessionRevision++;adminAuthed=true;await loadSharedUsage();render();if(pendingSave)void retrySync();toast('Настройки открыты')}catch(error){document.getElementById('adminPassword').value='';toast(error.message)}finally{if(document.contains(button))button.disabled=false}}
 function adminLogout(renderAfter=true){if(adminLogoutTask)return adminLogoutTask;adminLogoutTask=(async()=>{if(saveTask&&await saveTask===false)return false;if(pendingSave&&await flushProgress()===false)return false;adminSessionRevision++;adminAuthed=false;settingsSection='economy';historyTeam=TEAM_KEY;historySnapshot=null;historyETag=null;historyLoading=false;historyError='';historyRequest++;const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),5000);try{await fetch('/api/admin/logout',{method:'POST',credentials:'same-origin',signal:controller.signal})}catch{}finally{clearTimeout(timeout);if(renderAfter)render()}return true})().finally(()=>{adminLogoutTask=null});return adminLogoutTask}
