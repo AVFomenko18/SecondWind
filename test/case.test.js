@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CASE_COST, MINI_PRIZES, SOUVENIR_SECTORS, SUPER_CHEST_CHANCE, casePool, drawCasePrize, drawCaseOutcome, createChestRound } from '../case.js';
+import { CASE_COST, MINI_PRIZES, SOUVENIR_SECTORS, SOUVENIR_WEIGHT_MULTIPLIER, SUPER_CHEST_CHANCE, casePool, drawCasePrize, drawCaseOutcome, createChestRound } from '../case.js';
 
 const shop = [
   { id: 'cheap', name: 'Обед', cost: 1, enabled: true, superPrize: false },
@@ -62,17 +62,24 @@ test('three souvenir sectors award a random souvenir without changing super ches
   assert.equal(second.prize.id, MINI_PRIZES.at(-1).id);
 });
 
-test('souvenirs occupy eighty percent of non-chest outcomes as the ordinary catalog changes', () => {
+test('souvenirs replace half of the previous sports-reward probability', () => {
+  assert.equal(SOUVENIR_WEIGHT_MULTIPLIER, 10);
+  const previousSportsChance = (1 - SUPER_CHEST_CHANCE) / 5 + SUPER_CHEST_CHANCE / 3;
+  const sportsChance = (1 - SUPER_CHEST_CHANCE) / (1 + SOUVENIR_WEIGHT_MULTIPLIER) + SUPER_CHEST_CHANCE / 3;
+  const souvenirChance = (1 - SUPER_CHEST_CHANCE) * SOUVENIR_WEIGHT_MULTIPLIER / (1 + SOUVENIR_WEIGHT_MULTIPLIER) + SUPER_CHEST_CHANCE / 3;
+  assert.ok(sportsChance <= previousSportsChance / 2);
+  assert.ok(Math.abs(sportsChance - 0.1018) < 0.0001);
+  assert.ok(Math.abs(souvenirChance - 0.8832) < 0.0001);
   const ordinary = [{ id: 'cheap', cost: 1, enabled: true, superPrize: false },
     { id: 'standard', cost: 2, enabled: true, superPrize: false }];
   for (const catalog of [ordinary.slice(0, 1), ordinary]) {
     const items = casePool(catalog, []);
     const regularWeight = items.reduce((sum, item) => sum + item.weight, 0);
     let souvenirs = 0;
-    for (let draw = 0; draw < regularWeight * 5; draw++) {
-      const outcome = drawCaseOutcome(items, max => max === regularWeight * 5 ? draw : 0);
+    for (let draw = 0; draw < regularWeight * (1 + SOUVENIR_WEIGHT_MULTIPLIER); draw++) {
+      const outcome = drawCaseOutcome(items, max => max === regularWeight * (1 + SOUVENIR_WEIGHT_MULTIPLIER) ? draw : 0);
       if (outcome.souvenir) souvenirs++;
     }
-    assert.equal(souvenirs, regularWeight * 4);
+    assert.equal(souvenirs, regularWeight * SOUVENIR_WEIGHT_MULTIPLIER);
   }
 });
