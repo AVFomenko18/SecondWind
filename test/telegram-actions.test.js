@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseSalesNotification } from '../telegram-actions.js';
+import { parseSalesNotification, startsNewPeriod } from '../telegram-actions.js';
 
 test('parses different payment event wording and ignores revenue footer', () => {
   for (const phrase of ['занёс доплату', 'занес оплату', 'внесла предоплату', 'провела полную оплату']) {
@@ -27,4 +27,10 @@ test('new event labels are treated as payments without parser changes', () => {
   const parsed = parseSalesNotification('Иванова Анна внесла первый взнос за курс за 70 000 рублей.');
   assert.equal(parsed?.eventType, 'первый взнос');
   assert.equal(parsed?.kind, 'cashMid');
+});
+
+test('pending Telegram actions reset only when a saved team starts a new period', () => {
+  assert.equal(startsNewPeriod({ id: 'period-1' }, { id: 'period-2' }), true);
+  assert.equal(startsNewPeriod({ id: 'period-1' }, { id: 'period-1' }), false);
+  assert.equal(startsNewPeriod({}, { id: 'period-1' }), false);
 });

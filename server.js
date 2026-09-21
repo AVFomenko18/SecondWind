@@ -4,7 +4,7 @@ import { createHmac, createHash, randomUUID, timingSafeEqual } from 'node:crypto
 import { isDeepStrictEqual } from 'node:util';
 import { CASE_COST, MINI_PRIZES, SUPER_CHEST_CHANCE, casePool, drawCaseOutcome, createChestRound } from './case.js';
 import { publicUpdateValid } from './game-integrity.js';
-import { normalizeSalesName, parseSalesNotification } from './telegram-actions.js';
+import { normalizeSalesName, parseSalesNotification, startsNewPeriod } from './telegram-actions.js';
 import { FOMENKO_ALIASES, TEAM_ROSTERS, TELEGRAM_NAME_OVERRIDES } from './team-rosters.js';
 
 const { Pool } = pg;
@@ -930,6 +930,13 @@ app.post('/api/game-state', async (req, res) => {
         await client.query('ROLLBACK');
         return res.status(409).json({ code: 'SUPER_PRIZE_SOLD_OUT', error: 'Супер-приз уже разобрали. Обновите страницу и выберите другую награду.' });
       }
+    }
+    if (startsNewPeriod(before, req.body)) {
+      await client.query(`
+        UPDATE telegram_action_credits
+        SET status = 'expired'
+        WHERE team_id = $1 AND status = 'pending'
+      `, [id]);
     }
     await client.query(
       `INSERT INTO game_state (id, data, updated_at)

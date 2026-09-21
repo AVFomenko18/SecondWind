@@ -3,6 +3,11 @@ export function normalizeSalesName(value) {
     .replace(/ё/g, 'е').replace(/[^а-яa-z\s-]/gi, ' ').replace(/\s+/g, ' ').trim();
 }
 
+export function startsNewPeriod(before, after) {
+  return typeof before?.id === 'string' && before.id.length > 0 &&
+    typeof after?.id === 'string' && after.id.length > 0 && before.id !== after.id;
+}
+
 export function parseSalesNotification(text) {
   if (typeof text !== 'string') return null;
   const headline = text.split(/\n\s*\n/)[0].replace(/\s+/g, ' ').trim();
