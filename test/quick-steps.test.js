@@ -59,17 +59,17 @@ test('quick buttons credit calibrated steps without inventing cash amounts or di
   assert.deepEqual(animations.map(item => item.amount), [1, 2, 4]);
 });
 
-test('activity is once a day; cross-sale and three calls credit calibrated steps', () => {
+test('activity is closed while cross-sale and three calls still credit calibrated steps', () => {
   const { context, player, messages } = setup();
   context.creditQuickStep('activity');
   context.creditQuickStep('activity');
   context.creditQuickStep('cross');
   context.creditQuickStep('powerCalls');
-  assert.equal(player.bank, 8.5);
-  assert.equal(player.actionCounts['activity-2026-09-18'], 70);
+  assert.equal(player.bank, 3.5);
+  assert.equal(player.actionCounts['activity-2026-09-18'], undefined);
   assert.equal(player.cross, 1);
   assert.equal(player.calls, 3);
-  assert.ok(messages.some(text => text.includes('уже учтён')));
+  assert.ok(messages.some(text => text.includes('временно недоступна')));
 });
 
 test('game field shows six direct buttons instead of amount inputs', () => {
@@ -91,6 +91,7 @@ test('game field shows six direct buttons instead of amount inputs', () => {
   assert.match(view, /1,5 шага/);
   assert.match(view, /4 шага/);
   assert.match(view, /5 шагов/);
+  assert.match(view, /Активность пока недоступна/);
   assert.doesNotMatch(view, /👟|Всего оплат|учтено дней|Всего кросс-сейлов|Дополнительные действия/);
   assert.doesNotMatch(view, /type="number"/);
   assert.equal((view.match(/onclick="requestQuickStep/g) || []).length, 6);

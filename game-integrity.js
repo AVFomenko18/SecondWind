@@ -5,13 +5,15 @@ const CHECKPOINT_COINS = 5;
 const LAP_COINS = 2;
 const COLORS = new Set(['#286653','#cf744d','#6976b3','#af5980','#a19036','#448e9e','#795c9b','#6f8746']);
 const STEPS = { 'payment-low': 1, 'payment-mid': 2, 'payment-high': 4, 'power-calls': 1.5 };
+const ACTIVITY_ENABLED_NAMES = new Set([]);
 const integer = (value, min = 0, max = 1000000000) => Number.isSafeInteger(value) && value >= min && value <= max;
 const halfStep = value => Number.isFinite(value) && Number.isSafeInteger(value * 2);
 
 function without(object, keys) {
   return Object.fromEntries(Object.entries(object || {}).filter(([key]) => !keys.includes(key)));
 }
-function activityDayAllowed(key) {
+function activityDayAllowed(key, player) {
+  if (!ACTIVITY_ENABLED_NAMES.has(player?.name?.trim().toLocaleLowerCase('ru-RU'))) return false;
   const match = /^activity-(\d{4}-\d{2}-\d{2})$/.exec(key);
   if (!match) return false;
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Moscow' });
@@ -175,7 +177,7 @@ function earnedStepsForPlayer(oldPlayer, player, actions) {
       earned += change * STEPS[key];
     } else if (key === 'cross') {
       earned += change * 2;
-    } else if (activityDayAllowed(key)) {
+    } else if (activityDayAllowed(key, player)) {
       if (previous !== 0 || next !== 70) return null;
       earned += 5;
     } else {

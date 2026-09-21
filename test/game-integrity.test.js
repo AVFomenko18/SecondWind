@@ -28,15 +28,11 @@ function changed(before) {
   return after;
 }
 
-test('ordinary payment, activity, cross-sale, calls and a run save without admin access', () => {
+test('ordinary payment, cross-sale, calls and a run save without admin access', () => {
   for (const mutate of [
     next => { next.players[0].actionCounts['payment-low'] = 1; next.players[0].bank = 1; },
     next => { next.players[0].actionCounts['payment-mid'] = 1; next.players[0].bank = 2; },
     next => { next.players[0].actionCounts['payment-high'] = 1; next.players[0].bank = 4; },
-    next => {
-      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Moscow' });
-      next.players[0].actionCounts['activity-' + today] = 70; next.players[0].bank = 5;
-    },
     next => { next.players[0].cross = 1; next.players[0].bank = 2; },
     next => { next.players[0].calls = 3; next.players[0].actionCounts['power-calls'] = 1; next.players[0].bank = 1.5; }
   ]) {
@@ -51,6 +47,15 @@ test('ordinary payment, activity, cross-sale, calls and a run save without admin
   after.players[0].pos = 7; after.players[0].high = 7; after.players[0].bank = 0;
   after.ledger.push({ id: 'coin-6', playerId: 'p1', source: 'milestone', ref: '6', amount: 5, title: 'Рубеж 6', at });
   assert.equal(publicUpdateValid(before, after), true);
+});
+
+test('activity steps are rejected while activity buttons are closed', () => {
+  const before = fixture();
+  const after = changed(before);
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Moscow' });
+  after.players[0].actionCounts['activity-' + today] = 70;
+  after.players[0].bank = 5;
+  assert.equal(publicUpdateValid(before, after), false);
 });
 
 test('ordinary users cannot forge money, position, awards or reward delivery', () => {
