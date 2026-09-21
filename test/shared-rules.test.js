@@ -64,3 +64,12 @@ test('used challenge and action terms cannot be changed through another team', (
   assert.equal(context.changesUsedRules(rules, { ...rules, actions: [{ ...rules.actions[0], unit: 4 }] }, usage), true);
   assert.equal(context.changesUsedRules(rules, { ...rules, challenges: [{ ...rules.challenges[0], enabled: false }] }, usage), false);
 });
+
+test('repeatable power-call challenge usage maps back to its rule id', () => {
+  const usage = context.ruleUsage([{ players: [], ledger: [
+    { source: 'challenge', ref: 'challenge-power-calls:first' },
+    { source: 'challenge', ref: 'challenge-power-calls:second' }
+  ] }]);
+  assert.equal(usage.challengeIds.length, 1);
+  assert.equal(usage.challengeIds[0], 'challenge-power-calls');
+});

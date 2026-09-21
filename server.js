@@ -41,7 +41,7 @@ const DEFAULT_RULES = Object.freeze({ cashUnit: 50000, crossSteps: 1, actions: [
   { id: 'challenge-1', name: 'Личный рекорд', description: 'Превысить свой лучший дневной результат по количеству оплат. Предложение — согласуйте критерий до старта.', medals: 1, enabled: false },
   { id: 'challenge-2', name: 'Командный ассист', description: 'Помочь коллеге довести сложную сделку до оплаты. Предложение — согласуйте критерий до старта.', medals: 1, enabled: false },
   { id: 'challenge-3', name: 'Большой рывок', description: 'Выполнить особую цель периода, заранее согласованную с ведущим.', medals: 2, enabled: false },
-  { id: 'challenge-power-calls', name: 'Мини-челлендж: мощный дожим', description: 'Провести три звонка с мощным дожимом. Выполнение подтверждает руководитель.', medals: 2, enabled: true }
+  { id: 'challenge-power-calls', name: 'Мини-челлендж: мощный дожим', description: 'Провести три звонка с мощным дожимом. Руководитель может подтверждать выполнение без ограничений.', medals: 2, enabled: true }
 ] });
 function sharedRules(config) {
   return { cashUnit: config?.cashUnit, crossSteps: config?.crossSteps,
@@ -71,7 +71,9 @@ function ruleUsage(states) {
   let economyUsed = false;
   for (const game of states) {
     for (const entry of Array.isArray(game?.ledger) ? game.ledger : []) {
-      if (entry?.source === 'challenge' && typeof entry.ref === 'string') challengeIds.add(entry.ref);
+      if (entry?.source === 'challenge' && typeof entry.ref === 'string') {
+        challengeIds.add(entry.ref.startsWith('challenge-power-calls:') ? 'challenge-power-calls' : entry.ref);
+      }
     }
     for (const player of Array.isArray(game?.players) ? game.players : []) {
       if (player.cash > (player.cashBase || 0) || player.calls > 0 || player.cross > 0) economyUsed = true;
@@ -403,7 +405,7 @@ function ensureTable() {
         rulesChanged = true;
       }
       if (!currentRules.challenges.some(item => item.id === 'challenge-power-calls')) {
-        currentRules.challenges.push({ id: 'challenge-power-calls', name: 'Мини-челлендж: мощный дожим', description: 'Провести три звонка с мощным дожимом. Выполнение подтверждает руководитель.', medals: 2, enabled: true });
+        currentRules.challenges.push({ id: 'challenge-power-calls', name: 'Мини-челлендж: мощный дожим', description: 'Провести три звонка с мощным дожимом. Руководитель может подтверждать выполнение без ограничений.', medals: 2, enabled: true });
         rulesChanged = true;
       }
       if (rulesChanged) await pool.query('UPDATE department_rules SET data = $1::jsonb WHERE id = 1', [JSON.stringify(currentRules)]);
