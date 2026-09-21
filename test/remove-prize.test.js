@@ -16,7 +16,9 @@ test('removed prize is absent from new and previously saved department catalogs'
   assert.equal(defaults.find(item => item.id === 'prize-1')?.name, 'Закончить день на 30 минут раньше');
   assert.equal(defaults.find(item => item.id === 'prize-6')?.name, 'Отказаться от двух лидов');
   assert.equal(defaults.find(item => item.id === 'prize-7')?.name, '+1 курс в распределение');
-  assert.equal(defaults.find(item => item.id === 'prize-24')?.name, 'Индивидуальный тег в группе в ТГ');
+  assert.equal(defaults.find(item => item.id === 'prize-24')?.name, 'Индивидуальная плашка в чате продаж');
+  assert.equal(defaults.find(item => item.id === 'prize-25')?.name, 'Индивидуальная отбивка при продажах');
+  assert.equal(defaults.find(item => item.id === 'prize-25')?.cost, 2);
   const stored = context.completeShop([
     { id: 'prize-0', name: 'Начать день на час позже', cost: 2, enabled: true },
     { id: 'prize-1', name: 'Закончить день на час раньше', cost: 2, enabled: true },
@@ -41,9 +43,11 @@ test('new game and imported backup omit the removed prize', () => {
   assert.match(defaults, /Закончить день на 30 минут раньше/);
   assert.match(defaults, /Отказаться от двух лидов/);
   assert.match(defaults, /\+1 курс в распределение/);
-  assert.match(html, /Индивидуальный тег в группе в ТГ/);
+  assert.match(html, /Индивидуальная плашка в чате продаж/);
+  assert.match(html, /Индивидуальная отбивка при продажах/);
   assert.match(migration, /prize\.id!=='prize-0'/);
   assert.match(migration, /Закончить день на 30 минут раньше/);
   assert.match(migration, /Отказаться от двух лидов/);
   assert.match(migration, /\+1 курс в распределение/);
+  assert.match(migration, /Индивидуальная плашка в чате продаж/);
 });

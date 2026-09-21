@@ -17,7 +17,8 @@ const NEW_SHOP_PRIZES = Object.freeze([
   { id: 'prize-21', name: 'Забрать оплату у робота Алёши · до 50 000 ₽', cost: 7, enabled: true },
   { id: 'prize-22', name: 'Индивидуальная гифка с менеджером', cost: 2, enabled: true },
   { id: 'prize-23', name: 'Доставка еды от босса', cost: 7, enabled: true },
-  { id: 'prize-24', name: 'Индивидуальный тег в группе в ТГ', cost: 2, enabled: true }
+  { id: 'prize-24', name: 'Индивидуальная плашка в чате продаж', cost: 2, enabled: true },
+  { id: 'prize-25', name: 'Индивидуальная отбивка при продажах', cost: 2, enabled: true }
 ]);
 const INITIAL_SUPER_PRIZE_LIMITS = Object.freeze({ 'prize-8': 5, 'prize-9': 5, 'prize-20': 5, 'prize-21': 5, 'prize-23': 5 });
 const DEFAULT_SHOP_NAMES = ['Закончить день на 30 минут раньше', 'Обед 1,5 часа', 'День без встреч', 'День без отчётов', 'Несгораемый день', 'Отказаться от двух лидов', '+1 курс в распределение', 'Сертификат 1 000 ₽', 'Кино от босса'];
@@ -30,6 +31,7 @@ function completeShop(items) {
     if (item.id === 'prize-1' && item.name === 'Закончить день на час раньше') item.name = 'Закончить день на 30 минут раньше';
     if (item.id === 'prize-6' && /^Отказаться от (?:2|3|двух|трёх) лидов$/i.test(item.name)) item.name = 'Отказаться от двух лидов';
     if (item.id === 'prize-7' && /^\+[135] курс(?:ов|а)? в распределение$/i.test(item.name)) item.name = '+1 курс в распределение';
+    if (item.id === 'prize-24' && item.name === 'Индивидуальный тег в группе в ТГ') item.name = 'Индивидуальная плашка в чате продаж';
   }
   for (const prize of NEW_SHOP_PRIZES) if (!shop.some(item => item.id === prize.id)) shop.push({ ...prize });
   return shop.map(item => ({ ...item,
