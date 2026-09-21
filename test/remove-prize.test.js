@@ -13,7 +13,10 @@ test('removed prize is absent from new and previously saved department catalogs'
   vm.runInContext(`${server.slice(start, end)}\nthis.completeShop = completeShop;`, context);
   const defaults = context.completeShop();
   assert.equal(defaults.some(item => item.id === 'prize-0'), false);
-  assert.equal(defaults.find(item => item.id === 'prize-1')?.name, 'Закончить день на час раньше');
+  assert.equal(defaults.find(item => item.id === 'prize-1')?.name, 'Закончить день на 30 минут раньше');
+  assert.equal(defaults.find(item => item.id === 'prize-6')?.name, 'Отказаться от двух лидов');
+  assert.equal(defaults.find(item => item.id === 'prize-7')?.name, '+1 курс в распределение');
+  assert.equal(defaults.find(item => item.id === 'prize-24')?.name, 'Индивидуальный тег в группе в ТГ');
   const stored = context.completeShop([
     { id: 'prize-0', name: 'Начать день на час позже', cost: 2, enabled: true },
     { id: 'prize-1', name: 'Закончить день на час раньше', cost: 2, enabled: true },
@@ -21,6 +24,7 @@ test('removed prize is absent from new and previously saved department catalogs'
   ]);
   assert.equal(stored.some(item => item.id === 'prize-0'), false);
   assert.equal(stored.some(item => item.id === 'custom-bonus'), true);
+  assert.equal(stored.find(item => item.id === 'prize-1')?.name, 'Закончить день на 30 минут раньше');
   const food = stored.find(item => item.id === 'prize-23');
   assert.equal(food?.name, 'Доставка еды от босса');
   assert.equal(food?.cost, 7);
@@ -34,5 +38,12 @@ test('new game and imported backup omit the removed prize', () => {
   const migration = html.slice(html.indexOf('function renameCinemaPrize(s){'), html.indexOf('function addNewShopPrizes(game){'));
   assert.doesNotMatch(defaults, /Начать день на час позже/);
   assert.match(defaults, /id:'prize-'\+\(i\+1\)/);
+  assert.match(defaults, /Закончить день на 30 минут раньше/);
+  assert.match(defaults, /Отказаться от двух лидов/);
+  assert.match(defaults, /\+1 курс в распределение/);
+  assert.match(html, /Индивидуальный тег в группе в ТГ/);
   assert.match(migration, /prize\.id!=='prize-0'/);
+  assert.match(migration, /Закончить день на 30 минут раньше/);
+  assert.match(migration, /Отказаться от двух лидов/);
+  assert.match(migration, /\+1 курс в распределение/);
 });
