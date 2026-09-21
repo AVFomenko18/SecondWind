@@ -9,7 +9,7 @@ import { FOMENKO_ALIASES, TEAM_ROSTERS, TELEGRAM_NAME_OVERRIDES } from './team-r
 
 const { Pool } = pg;
 const app = express();
-const PAYMENT_CREDIT_RESET_MIGRATION = '2026-09-21-reset-pending-payment-credits-v1';
+const ACTION_CREDIT_RESET_MIGRATION = '2026-09-21-reset-pending-action-credits-v2';
 
 const NEW_SHOP_PRIZES = Object.freeze([
   { id: 'prize-20', name: 'Day off · дополнительный выходной', cost: 7, enabled: true },
@@ -381,9 +381,9 @@ function ensureTable() {
         UPDATE telegram_action_credits
         SET status = 'consumed', consumed_at = now()
         WHERE status = 'pending'
-          AND action_kind IN ('cashLow','cashMid','cashHigh')
+          AND action_kind IN ('cashLow','cashMid','cashHigh','cross')
           AND EXISTS (SELECT 1 FROM claimed)
-      `, [PAYMENT_CREDIT_RESET_MIGRATION]);
+      `, [ACTION_CREDIT_RESET_MIGRATION]);
       let rulesResult = await pool.query('SELECT data FROM department_rules WHERE id = 1');
       if (!rulesResult.rows.length) {
         const fomenkoRules = await pool.query('SELECT data->\'config\' AS config FROM game_state WHERE id = 1');
@@ -948,7 +948,7 @@ app.post('/api/game-state', async (req, res) => {
         UPDATE telegram_action_credits
         SET status = 'consumed', consumed_at = now()
         WHERE team_id = $1 AND status = 'pending'
-          AND action_kind IN ('cashLow','cashMid','cashHigh')
+          AND action_kind IN ('cashLow','cashMid','cashHigh','cross')
       `, [id]);
     }
     await client.query(

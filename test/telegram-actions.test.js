@@ -36,9 +36,9 @@ test('pending Telegram actions reset only when a saved team starts a new period'
   assert.equal(startsNewPeriod({}, { id: 'period-1' }), false);
 });
 
-test('period reset and deployment cleanup invalidate payment credits without removing cross-sales', () => {
+test('period reset and deployment cleanup invalidate payment and cross-sale credits', () => {
   const server = readFileSync(new URL('../server.js', import.meta.url), 'utf8');
-  assert.match(server, /reset-pending-payment-credits/);
-  assert.match(server, /action_kind IN \('cashLow','cashMid','cashHigh'\)/);
+  assert.match(server, /reset-pending-action-credits-v2/);
+  assert.match(server, /action_kind IN \('cashLow','cashMid','cashHigh','cross'\)/);
   assert.doesNotMatch(server, /SET status = 'expired'/);
 });
