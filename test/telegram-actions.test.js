@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { parseSalesNotification, startsNewPeriod } from '../telegram-actions.js';
 
 test('parses different payment event wording and ignores revenue footer', () => {
@@ -33,4 +34,11 @@ test('pending Telegram actions reset only when a saved team starts a new period'
   assert.equal(startsNewPeriod({ id: 'period-1' }, { id: 'period-2' }), true);
   assert.equal(startsNewPeriod({ id: 'period-1' }, { id: 'period-1' }), false);
   assert.equal(startsNewPeriod({}, { id: 'period-1' }), false);
+});
+
+test('period reset and deployment cleanup invalidate payment credits without removing cross-sales', () => {
+  const server = readFileSync(new URL('../server.js', import.meta.url), 'utf8');
+  assert.match(server, /reset-pending-payment-credits/);
+  assert.match(server, /action_kind IN \('cashLow','cashMid','cashHigh'\)/);
+  assert.doesNotMatch(server, /SET status = 'expired'/);
 });
