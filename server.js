@@ -37,19 +37,18 @@ const MANAGER_NAME_SYNCS = Object.freeze([
 ]);
 
 const NEW_SHOP_PRIZES = Object.freeze([
-  { id: 'prize-20', name: 'Day off · дополнительный выходной', cost: 7, enabled: true },
   { id: 'prize-21', name: 'Забрать оплату у робота Алёши · до 50 000 ₽', cost: 7, enabled: true },
   { id: 'prize-22', name: 'Индивидуальная гифка с менеджером', cost: 2, enabled: true },
   { id: 'prize-23', name: 'Доставка еды от босса', cost: 7, enabled: true },
   { id: 'prize-24', name: 'Индивидуальная плашка в чате продаж', cost: 2, enabled: true },
   { id: 'prize-25', name: 'Индивидуальная отбивка при продажах', cost: 2, enabled: true }
 ]);
-const INITIAL_SUPER_PRIZE_LIMITS = Object.freeze({ 'prize-8': 10, 'prize-9': 10, 'prize-20': 10, 'prize-21': 6, 'prize-23': 10 });
+const INITIAL_SUPER_PRIZE_LIMITS = Object.freeze({ 'prize-8': 10, 'prize-9': 10, 'prize-21': 6, 'prize-23': 10 });
 const DEFAULT_SHOP_NAMES = ['Закончить день на 30 минут раньше', 'Обед 1,5 часа', 'День без встреч', 'День без отчётов', 'Несгораемый день', 'Отказаться от двух лидов', '+1 курс в распределение', 'Сертификат 1 000 ₽', 'Кино от босса'];
 const DEFAULT_SHOP_COSTS = [2, 1, 3, 2, 3, 2, 3, 4, 2];
 const DEFAULT_SHOP = DEFAULT_SHOP_NAMES.map((name, index) => ({ id: `prize-${index + 1}`, name, cost: DEFAULT_SHOP_COSTS[index], enabled: true })).concat(NEW_SHOP_PRIZES);
 function completeShop(items) {
-  const shop = Array.isArray(items) ? items.filter(item => !['prize-0', 'prize-10'].includes(item.id)).map(item => ({ ...item })) : DEFAULT_SHOP.map(item => ({ ...item }));
+  const shop = Array.isArray(items) ? items.filter(item => !['prize-0', 'prize-10', 'prize-20'].includes(item.id)).map(item => ({ ...item })) : DEFAULT_SHOP.map(item => ({ ...item }));
   for (const item of shop) if (item.id === 'prize-9' && item.name === 'Обед от босса') item.name = 'Кино от босса';
   for (const item of shop) {
     if (item.id === 'prize-1' && item.name === 'Закончить день на час раньше') item.name = 'Закончить день на 30 минут раньше';
