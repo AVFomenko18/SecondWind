@@ -40,3 +40,13 @@ test('reward feed API exposes prize categories used by the dashboard', () => {
   assert.match(server, /miniPrize: reward\.miniPrize === true/);
   assert.match(server, /souvenir: reward\.souvenir === true/);
 });
+
+test('reward feed opens in a larger scrollable dialog', () => {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  assert.match(html, /class="reward-feed-expand"[^>]+onclick="openRewardFeedDialog\(\)"[^>]*>Развернуть ↗<\/button>/);
+  assert.match(html, /<dialog id="rewardFeedDialog" class="reward-feed-dialog"/);
+  assert.match(html, /\.reward-feed-dialog\{[^}]*width:min\(1120px,[^}]*height:min\(780px,/);
+  assert.match(html, /\.reward-feed-dialog-list\{[^}]*overflow-y:auto/);
+  assert.match(html, /function openRewardFeedDialog\(\)[^{]*\{[^}]*showModal\(\)/);
+  assert.match(html, /function closeRewardFeedDialog\(\)[^{]*\{[^}]*\.close\(\)/);
+});
