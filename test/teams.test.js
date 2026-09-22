@@ -11,7 +11,7 @@ const expected = [
   ['kulikov', 'Куликов', 6],
   ['kondratyev', 'Кондратьев', 7],
   ['chekhova', 'Чехова', 8],
-  ['klimentovich', 'Климентович', 9],
+  ['klimentovich', 'Клементович', 9],
   ['bagaturiya', 'Багатурия', 10],
   ['tolstov', 'Толстов', 11]
 ];
