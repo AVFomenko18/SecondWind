@@ -5,8 +5,9 @@ import vm from 'node:vm';
 
 const page = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 
-test('coin settings offer an explicit whole-team action', () => {
-  assert.match(page, /onclick="grantManagerCoins\(event,true\)">Начислить всей команде<\/button>/);
+test('coin recipient selector offers the whole team', () => {
+  assert.match(page, /<select id="coinManager"><option value="__team__">Вся команда · \$\{state\.players\.length\} менеджеров<\/option>/);
+  assert.doesNotMatch(page, /grantManagerCoins\(event,true\)/);
   assert.match(page, /Сколько монет начислить каждому/);
 });
 
@@ -16,7 +17,7 @@ test('whole-team coin grant awards every manager in one saved action', () => {
   const awards = [], logs = [], messages = [];
   let snapshots = 0, commits = 0, confirmations = 0, id = 0;
   const inputs = {
-    coinManager: { value: 'first' }, coinAmount: { value: '3' }, coinReason: { value: 'Командный бонус' }
+    coinManager: { value: '__team__' }, coinAmount: { value: '3' }, coinReason: { value: 'Командный бонус' }
   };
   const context = {
     state: { players: [{ id: 'first', name: 'Первый' }, { id: 'second', name: 'Второй' }] },
@@ -31,7 +32,7 @@ test('whole-team coin grant awards every manager in one saved action', () => {
   };
   vm.createContext(context);
   vm.runInContext(page.slice(start, end), context);
-  context.grantManagerCoins({}, true);
+  context.grantManagerCoins({});
 
   assert.equal(confirmations, 1);
   assert.equal(snapshots, 1);
