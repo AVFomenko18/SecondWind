@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { TEAM_ROSTERS, TELEGRAM_NAME_OVERRIDES } from '../team-rosters.js';
+import { ROSTER_ALIASES, TEAM_ROSTERS, TELEGRAM_NAME_OVERRIDES } from '../team-rosters.js';
 
 test('department roster contains 83 unique managers across all eleven teams', () => {
   const names = Object.values(TEAM_ROSTERS).flat();
@@ -14,4 +14,19 @@ test('Telegram examples are assigned to their listed teams', () => {
   assert.ok(TEAM_ROSTERS.kozhanov.includes('Шеханова Лилия'));
   assert.ok(TEAM_ROSTERS.klimentovich.includes('Качегова Даяна'));
   assert.equal(TELEGRAM_NAME_OVERRIDES['Качегова Даяна'], 'Качетова Даяна');
+});
+
+test('dashboard spellings replace the four former roster spellings', () => {
+  const corrections = {
+    'Пасхалиди Димитрий': 'Пасхалиди Дмитрий',
+    'Гурулёва Дарья': 'Турулёва Дарья',
+    'Брудковски Александра': 'Бруковски Александра',
+    'Яловегин Николай': 'Яловеин Николай'
+  };
+  const names = Object.values(TEAM_ROSTERS).flat();
+  for (const [current, former] of Object.entries(corrections)) {
+    assert.ok(names.includes(current));
+    assert.ok(!names.includes(former));
+    assert.deepEqual(ROSTER_ALIASES[current], [former]);
+  }
 });

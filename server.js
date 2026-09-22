@@ -6,13 +6,14 @@ import { CASE_COST, MINI_PRIZES, SUPER_CHEST_CHANCE, casePool, drawCaseOutcome, 
 import { publicUpdateValid } from './game-integrity.js';
 import { dailyChallengeAdditionsValid } from './challenge-limits.js';
 import { normalizeSalesName, parseSalesNotification, startsNewPeriod } from './telegram-actions.js';
-import { FOMENKO_ALIASES, TEAM_ROSTERS, TELEGRAM_NAME_OVERRIDES } from './team-rosters.js';
+import { FOMENKO_ALIASES, ROSTER_ALIASES, TEAM_ROSTERS, TELEGRAM_NAME_OVERRIDES } from './team-rosters.js';
 
 const { Pool } = pg;
 const app = express();
 const ACTION_CREDIT_RESET_MIGRATION = '2026-09-21-reset-pending-action-credits-v2';
 const FOMENKO_ACTION_CREDIT_GRANT_MIGRATION = '2026-09-22-grant-alexander-fomenko-action-credits-v1';
 const ACTIVITY_CREDIT_GRANT_MIGRATION = '2026-09-22-grant-activity-70-percent-for-2026-09-21-v1';
+const MANAGER_NAME_SYNC_MIGRATION = '2026-09-22-correct-four-manager-names-and-resync-v1';
 const ACTIVITY_CREDIT_GRANTS = Object.freeze({
   fomenko: ['Попова Анастасия', 'Мишин Иван'],
   shabanov: ['Константинова Екатерина', 'Левченко Владислав', 'Пименова Виктория', 'Тихомирова Алина'],
@@ -20,12 +21,18 @@ const ACTIVITY_CREDIT_GRANTS = Object.freeze({
   kozhanov: ['Печинога Валерия', 'Шеханова Лилия', 'Негреева Диана'],
   kulikov: ['Ильина Диана', 'Кухто Арина', 'Беспалов Евгений', 'Забродская Карина'],
   kondratyev: ['Рассомакин Иван', 'Руденко Оксана', 'Шапошникова Натали', 'Шевелева Ксения'],
-  otrakusha: ['Лобков Артур', 'Мартышкина Ольга', 'Пасхалиди Дмитрий'],
-  chekhova: ['Турулёва Дарья', 'Шарапова Анастасия'],
+  otrakusha: ['Лобков Артур', 'Мартышкина Ольга', 'Пасхалиди Димитрий'],
+  chekhova: ['Гурулёва Дарья', 'Шарапова Анастасия'],
   tolstov: ['Прохорова Василиса', 'Гусев Кирилл', 'Романова Людмила', 'Квон Екатерина', 'Умнова Виктория'],
-  bagaturiya: ['Белеева Мария', 'Степанов Петр', 'Лем Станислав', 'Михайлова Карина', 'Бруковски Александра', 'Золотарев Игорь'],
-  klimentovich: ['Шум Карина', 'Яловеин Николай', 'Гончарова Ирина', 'Зинкевич Елизавета']
+  bagaturiya: ['Белеева Мария', 'Степанов Петр', 'Лем Станислав', 'Михайлова Карина', 'Брудковски Александра', 'Золотарев Игорь'],
+  klimentovich: ['Шум Карина', 'Яловегин Николай', 'Гончарова Ирина', 'Зинкевич Елизавета']
 });
+const MANAGER_NAME_SYNCS = Object.freeze([
+  { team: 'otrakusha', name: 'Пасхалиди Димитрий', aliases: ['Пасхалиди Дмитрий'] },
+  { team: 'chekhova', name: 'Гурулёва Дарья', aliases: ['Турулёва Дарья'] },
+  { team: 'bagaturiya', name: 'Брудковски Александра', aliases: ['Бруковски Александра'] },
+  { team: 'klimentovich', name: 'Яловегин Николай', aliases: ['Яловеин Николай'] }
+]);
 
 const NEW_SHOP_PRIZES = Object.freeze([
   { id: 'prize-20', name: 'Day off · дополнительный выходной', cost: 7, enabled: true },
@@ -263,7 +270,7 @@ function applyRoster(game, teamKey, names) {
   const next = structuredClone(game), existing = Array.isArray(next.players) ? next.players : [];
   const unused = new Set(existing);
   next.players = names.map((name, index) => {
-    const aliases = teamKey === 'fomenko' ? (FOMENKO_ALIASES[name] || []) : [];
+    const aliases = [...(teamKey === 'fomenko' ? (FOMENKO_ALIASES[name] || []) : []), ...(ROSTER_ALIASES[name] || [])];
     const player = existing.find(item => unused.has(item) && [name, ...aliases].some(candidate => normalizeSalesName(item.name) === normalizeSalesName(candidate)));
     if (!player) return blankPlayer(name, index);
     unused.delete(player);
@@ -311,6 +318,54 @@ async function seedDepartmentRosters(catalog, rules) {
         UPDATE telegram_action_credits SET team_id = $1, player_id = $2, status = 'pending'
         WHERE status = 'unmatched' AND normalized_name = $3
       `, [id, player.id, normalizeSalesName(player.salesName)]);
+    }
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function correctManagerNamesAndResyncCredits() {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const claimed = await client.query(
+      'INSERT INTO app_migrations (id) VALUES ($1) ON CONFLICT DO NOTHING RETURNING id',
+      [MANAGER_NAME_SYNC_MIGRATION]
+    );
+    if (!claimed.rows.length) {
+      await client.query('ROLLBACK');
+      return;
+    }
+    for (const correction of MANAGER_NAME_SYNCS) {
+      const id = teamIds[correction.team];
+      const current = await client.query('SELECT data FROM game_state WHERE id = $1 FOR UPDATE', [id]);
+      const game = current.rows[0]?.data;
+      const acceptedNames = [correction.name, ...correction.aliases].map(normalizeSalesName);
+      const player = game?.players?.find(item => acceptedNames.includes(normalizeSalesName(item.name)));
+      if (!player) throw new Error(`MANAGER_NAME_SYNC_NOT_FOUND:${correction.team}:${correction.name}`);
+      const previousName = player.name;
+      player.name = correction.name;
+      player.salesName = correction.name;
+      if (previousName !== correction.name) {
+        const now = new Date().toISOString();
+        game.updated = now;
+        game.logs = Array.isArray(game.logs) ? game.logs : [];
+        game.logs.unshift({ id: randomUUID(), at: now, text: `Исправлено имя менеджера: ${previousName} → ${correction.name}.` });
+      }
+      await client.query('UPDATE game_state SET data = $2::jsonb, updated_at = now() WHERE id = $1', [id, JSON.stringify(game)]);
+      const normalizedAliases = [correction.name, ...correction.aliases].map(normalizeSalesName);
+      await client.query(`
+        UPDATE telegram_action_credits
+        SET team_id = $1, player_id = $2, status = 'pending'
+        WHERE status = 'unmatched'
+          AND action_kind IN ('cashLow','cashMid','cashHigh','cross')
+          AND normalized_name = ANY($3::text[])
+          AND created_at >= (((now() AT TIME ZONE 'Europe/Moscow')::date - 1)::timestamp AT TIME ZONE 'Europe/Moscow')
+      `, [id, player.id, normalizedAliases]);
     }
     await client.query('COMMIT');
   } catch (error) {
@@ -541,6 +596,7 @@ function ensureTable() {
       if (!validShop(catalog)) throw new Error('INVALID_SHOP_CATALOG');
       await pool.query('UPDATE department_shop SET data = $1::jsonb WHERE id = 1', [JSON.stringify(catalog)]);
       await seedDepartmentRosters(catalog, currentRules);
+      await correctManagerNamesAndResyncCredits();
       await grantFomenkoActionCredits();
       await grantActivityCredits();
       for (const item of catalog.filter(item => item.superPrize)) {
