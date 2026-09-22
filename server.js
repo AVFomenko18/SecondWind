@@ -14,6 +14,7 @@ const ACTION_CREDIT_RESET_MIGRATION = '2026-09-21-reset-pending-action-credits-v
 const FOMENKO_ACTION_CREDIT_GRANT_MIGRATION = '2026-09-22-grant-alexander-fomenko-action-credits-v1';
 const ACTIVITY_CREDIT_GRANT_MIGRATION = '2026-09-22-grant-activity-70-percent-for-2026-09-21-v1';
 const MANAGER_NAME_SYNC_MIGRATION = '2026-09-22-correct-four-manager-names-and-resync-v1';
+const SUPER_PRIZE_LIMITS_MIGRATION = '2026-09-22-update-super-prize-limits-v1';
 const ACTIVITY_CREDIT_GRANTS = Object.freeze({
   fomenko: ['Попова Анастасия', 'Мишин Иван'],
   shabanov: ['Константинова Екатерина', 'Левченко Владислав', 'Пименова Виктория', 'Тихомирова Алина'],
@@ -42,7 +43,7 @@ const NEW_SHOP_PRIZES = Object.freeze([
   { id: 'prize-24', name: 'Индивидуальная плашка в чате продаж', cost: 2, enabled: true },
   { id: 'prize-25', name: 'Индивидуальная отбивка при продажах', cost: 2, enabled: true }
 ]);
-const INITIAL_SUPER_PRIZE_LIMITS = Object.freeze({ 'prize-8': 5, 'prize-9': 5, 'prize-20': 5, 'prize-21': 5, 'prize-23': 5 });
+const INITIAL_SUPER_PRIZE_LIMITS = Object.freeze({ 'prize-8': 10, 'prize-9': 10, 'prize-20': 10, 'prize-21': 6, 'prize-23': 10 });
 const DEFAULT_SHOP_NAMES = ['Закончить день на 30 минут раньше', 'Обед 1,5 часа', 'День без встреч', 'День без отчётов', 'Несгораемый день', 'Отказаться от двух лидов', '+1 курс в распределение', 'Сертификат 1 000 ₽', 'Кино от босса'];
 const DEFAULT_SHOP_COSTS = [2, 1, 3, 2, 3, 2, 3, 4, 2];
 const DEFAULT_SHOP = DEFAULT_SHOP_NAMES.map((name, index) => ({ id: `prize-${index + 1}`, name, cost: DEFAULT_SHOP_COSTS[index], enabled: true })).concat(NEW_SHOP_PRIZES);
@@ -60,6 +61,30 @@ function completeShop(items) {
     superPrize: typeof item.superPrize === 'boolean' ? item.superPrize : Object.hasOwn(INITIAL_SUPER_PRIZE_LIMITS, item.id),
     stockLimit: Number.isSafeInteger(item.stockLimit) && item.stockLimit > 0 ? item.stockLimit : (INITIAL_SUPER_PRIZE_LIMITS[item.id] || 5)
   }));
+}
+async function updateInitialSuperPrizeLimits() {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const migration = await client.query(
+      'INSERT INTO app_migrations (id) VALUES ($1) ON CONFLICT DO NOTHING RETURNING id',
+      [SUPER_PRIZE_LIMITS_MIGRATION]
+    );
+    if (migration.rows.length) {
+      const result = await client.query('SELECT data FROM department_shop WHERE id = 1 FOR UPDATE');
+      const catalog = completeShop(result.rows[0]?.data);
+      for (const item of catalog) {
+        if (Object.hasOwn(INITIAL_SUPER_PRIZE_LIMITS, item.id)) item.stockLimit = INITIAL_SUPER_PRIZE_LIMITS[item.id];
+      }
+      await client.query('UPDATE department_shop SET data = $1::jsonb WHERE id = 1', [JSON.stringify(catalog)]);
+    }
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 function validShop(shop) {
   return Array.isArray(shop) && shop.length > 0 && shop.length <= 50 && new Set(shop.map(item => item.id)).size === shop.length && shop.every(item =>
@@ -591,6 +616,7 @@ function ensureTable() {
       if (rulesChanged) await pool.query('UPDATE department_rules SET data = $1::jsonb WHERE id = 1', [JSON.stringify(currentRules)]);
       const existingShop = await pool.query(`SELECT data #> '{config,shop}' AS shop FROM game_state WHERE jsonb_typeof(data #> '{config,shop}') = 'array' ORDER BY id LIMIT 1`);
       await pool.query('INSERT INTO department_shop (id, data) VALUES (1, $1::jsonb) ON CONFLICT DO NOTHING', [JSON.stringify(completeShop(existingShop.rows[0]?.shop))]);
+      await updateInitialSuperPrizeLimits();
       const catalogResult = await pool.query('SELECT data FROM department_shop WHERE id = 1');
       const catalog = completeShop(catalogResult.rows[0].data);
       if (!validShop(catalog)) throw new Error('INVALID_SHOP_CATALOG');
@@ -611,7 +637,8 @@ function ensureTable() {
           WHERE reward.item->>'prizeId' = $1 AND reward.item->>'cancelled' IS DISTINCT FROM 'true'
             AND (reward.item->>'superPrize' = 'true' OR ($3::boolean AND reward.item->>'superPrize' IS NULL))
           ON CONFLICT (prize_id) DO UPDATE
-          SET purchased = GREATEST(super_prize_inventory.purchased, EXCLUDED.purchased)
+          SET purchased = GREATEST(super_prize_inventory.purchased, EXCLUDED.purchased),
+              limit_count = EXCLUDED.limit_count
         `, [id, item.stockLimit, Object.hasOwn(INITIAL_SUPER_PRIZE_LIMITS, id)]);
       }
       for (const prize of NEW_SHOP_PRIZES) {

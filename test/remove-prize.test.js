@@ -31,7 +31,11 @@ test('removed prize is absent from new and previously saved department catalogs'
   assert.equal(food?.name, 'Доставка еды от босса');
   assert.equal(food?.cost, 7);
   assert.equal(food?.superPrize, true);
-  assert.equal(food?.stockLimit, 5);
+  assert.equal(food?.stockLimit, 10);
+  assert.equal(defaults.find(item => item.id === 'prize-8')?.stockLimit, 10);
+  assert.equal(defaults.find(item => item.id === 'prize-9')?.stockLimit, 10);
+  assert.equal(defaults.find(item => item.id === 'prize-20')?.stockLimit, 10);
+  assert.equal(defaults.find(item => item.id === 'prize-21')?.stockLimit, 6);
 });
 
 test('new game and imported backup omit the removed prize', () => {
