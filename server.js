@@ -11,6 +11,7 @@ import { FOMENKO_ALIASES, TEAM_ROSTERS, TELEGRAM_NAME_OVERRIDES } from './team-r
 const { Pool } = pg;
 const app = express();
 const ACTION_CREDIT_RESET_MIGRATION = '2026-09-21-reset-pending-action-credits-v2';
+const FOMENKO_ACTION_CREDIT_GRANT_MIGRATION = '2026-09-22-grant-alexander-fomenko-action-credits-v1';
 
 const NEW_SHOP_PRIZES = Object.freeze([
   { id: 'prize-20', name: 'Day off · дополнительный выходной', cost: 7, enabled: true },
@@ -305,6 +306,46 @@ async function seedDepartmentRosters(catalog, rules) {
     client.release();
   }
 }
+
+async function grantFomenkoActionCredits() {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const current = await client.query('SELECT data FROM game_state WHERE id = $1 FOR UPDATE', [teamIds.fomenko]);
+    const player = current.rows[0]?.data?.players?.find(item => normalizeSalesName(item.name) === normalizeSalesName('Александр Фоменко'));
+    if (!player) throw new Error('ALEXANDER_FOMENKO_NOT_FOUND');
+    const claimed = await client.query(
+      'INSERT INTO app_migrations (id) VALUES ($1) ON CONFLICT DO NOTHING RETURNING id',
+      [FOMENKO_ACTION_CREDIT_GRANT_MIGRATION]
+    );
+    if (!claimed.rows.length) {
+      await client.query('ROLLBACK');
+      return;
+    }
+    const kinds = [
+      ['cashLow', 49999],
+      ['cashMid', 50000],
+      ['cashHigh', 100000],
+      ['cross', 1]
+    ];
+    let messageId = 1;
+    for (const [kind, amount] of kinds) for (let copy = 0; copy < 2; copy++) {
+      await client.query(`
+        INSERT INTO telegram_action_credits
+          (chat_id, message_id, source_bot_id, manager_name, normalized_name, action_kind, amount, team_id, player_id, status, raw_text)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'pending',$10)
+      `, [`manual:${FOMENKO_ACTION_CREDIT_GRANT_MIGRATION}`, messageId++, 'manual-admin', player.name,
+        normalizeSalesName(player.name), kind, amount, teamIds.fomenko, player.id,
+        'Ручное начисление руководителем: две возможности для каждой кнопки оплаты и кросс-сейла.']);
+    }
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+}
 function teamId(req, res) {
   const key = req.query.team ?? 'fomenko';
   if (typeof key !== 'string' || !Object.hasOwn(teamIds, key)) {
@@ -430,6 +471,7 @@ function ensureTable() {
       if (!validShop(catalog)) throw new Error('INVALID_SHOP_CATALOG');
       await pool.query('UPDATE department_shop SET data = $1::jsonb WHERE id = 1', [JSON.stringify(catalog)]);
       await seedDepartmentRosters(catalog, currentRules);
+      await grantFomenkoActionCredits();
       for (const item of catalog.filter(item => item.superPrize)) {
         const id = item.id;
         await pool.query(`
