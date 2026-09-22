@@ -1384,13 +1384,14 @@ app.get('/api/department', async (req, res) => {
         payments: paymentCount(player, game.logs),
         laps: Math.floor(nonnegativeNumber(player.high) / 60),
         calls: nonnegativeNumber(player.calls),
+        activityDays: Object.keys(player.actionCounts || {}).filter(key => /^activity-\d{4}-\d{2}-\d{2}$/.test(key)).length,
         crossSales: nonnegativeNumber(player.cross),
         coins: ledger.reduce((sum, item) => sum + (item?.playerId === player.id && ['milestone', 'challenge', 'manual'].includes(item?.source) ? nonnegativeNumber(item.amount) : 0), 0)
       }));
       const totals = players.reduce((sum, player) => {
-        for (const key of ['steps', 'payments', 'laps', 'calls', 'crossSales', 'coins']) sum[key] += player[key];
+        for (const key of ['steps', 'payments', 'laps', 'calls', 'activityDays', 'crossSales', 'coins']) sum[key] += player[key];
         return sum;
-      }, { steps: 0, payments: 0, laps: 0, calls: 0, crossSales: 0, coins: 0 });
+      }, { steps: 0, payments: 0, laps: 0, calls: 0, activityDays: 0, crossSales: 0, coins: 0 });
       return { key, name: teamNames[key], players, totals, saved: Boolean(row), updatedAt: game.updated ?? row?.updated_at ?? null };
     });
     res.json({ teams });

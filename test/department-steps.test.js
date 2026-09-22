@@ -36,7 +36,11 @@ test('department counts all payment buttons and previous recorded payments', () 
   assert.doesNotMatch(department, /Выручка месяца/);
 });
 
-test('department ranking filters omit the calls tab', () => {
+test('department replaces calls with credited activity days', () => {
   const department = readFileSync(new URL('../department.html', import.meta.url), 'utf8');
-  assert.match(department, /METRICS\.filter\(metric=>metric\.key!==['"]calls['"]\)\.map/);
+  const server = readFileSync(new URL('../server.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(department, /key:'calls'|label:'Звонки'/);
+  assert.match(department, /key:'activityDays',label:'Дней с активностью 70\+'/);
+  assert.match(server, /activityDays: Object\.keys\(player\.actionCounts \|\| \{\}\)\.filter/);
+  assert.match(server, /'activityDays'/);
 });
