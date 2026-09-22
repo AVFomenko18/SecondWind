@@ -5,7 +5,8 @@ import { readFileSync } from 'node:fs';
 const server = readFileSync(new URL('../server.js', import.meta.url), 'utf8');
 
 test('manager correction keeps player ids and retries only recent unmatched sales events', () => {
-  assert.match(server, /correct-four-manager-names-and-resync-v1/);
+  assert.match(server, /correct-five-manager-names-and-resync-v2/);
+  assert.match(server, /name: 'Качегова Даяна', aliases: \['Качетова Даяна'\]/);
   assert.match(server, /player\.name = correction\.name/);
   assert.match(server, /player\.salesName = correction\.name/);
   assert.match(server, /WHERE status = 'unmatched'/);

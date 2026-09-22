@@ -14,7 +14,7 @@ const ACTION_CREDIT_RESET_MIGRATION = '2026-09-21-reset-pending-action-credits-v
 const FOMENKO_ACTION_CREDIT_GRANT_MIGRATION = '2026-09-22-grant-alexander-fomenko-action-credits-v1';
 const ACTIVITY_CREDIT_GRANT_MIGRATION = '2026-09-22-grant-activity-70-percent-for-2026-09-21-v1';
 const ZINKEVICH_PAYMENT_CREDIT_CORRECTION = '2026-09-22-move-zinkevich-high-payment-to-mid-v1';
-const MANAGER_NAME_SYNC_MIGRATION = '2026-09-22-correct-four-manager-names-and-resync-v1';
+const MANAGER_NAME_SYNC_MIGRATION = '2026-09-22-correct-five-manager-names-and-resync-v2';
 const SUPER_PRIZE_LIMITS_MIGRATION = '2026-09-22-update-super-prize-limits-v1';
 const CERTIFICATE_DEMO_STOCK_MIGRATION = '2026-09-22-reset-demo-certificate-stock-v1';
 const ACTIVITY_CREDIT_GRANTS = Object.freeze({
@@ -34,7 +34,8 @@ const MANAGER_NAME_SYNCS = Object.freeze([
   { team: 'otrakusha', name: 'Пасхалиди Димитрий', aliases: ['Пасхалиди Дмитрий'] },
   { team: 'chekhova', name: 'Гурулёва Дарья', aliases: ['Турулёва Дарья'] },
   { team: 'bagaturiya', name: 'Брудковски Александра', aliases: ['Бруковски Александра'] },
-  { team: 'klimentovich', name: 'Яловегин Николай', aliases: ['Яловеин Николай'] }
+  { team: 'klimentovich', name: 'Яловегин Николай', aliases: ['Яловеин Николай'] },
+  { team: 'klimentovich', name: 'Качегова Даяна', aliases: ['Качетова Даяна'] }
 ]);
 
 const NEW_SHOP_PRIZES = Object.freeze([
@@ -374,13 +375,14 @@ async function correctManagerNamesAndResyncCredits() {
       const player = game?.players?.find(item => acceptedNames.includes(normalizeSalesName(item.name)));
       if (!player) throw new Error(`MANAGER_NAME_SYNC_NOT_FOUND:${correction.team}:${correction.name}`);
       const previousName = player.name;
+      const previousSalesName = player.salesName;
       player.name = correction.name;
       player.salesName = correction.name;
-      if (previousName !== correction.name) {
+      if (previousName !== correction.name || previousSalesName !== correction.name) {
         const now = new Date().toISOString();
         game.updated = now;
         game.logs = Array.isArray(game.logs) ? game.logs : [];
-        game.logs.unshift({ id: randomUUID(), at: now, text: `Исправлено имя менеджера: ${previousName} → ${correction.name}.` });
+        game.logs.unshift({ id: randomUUID(), at: now, text: `Исправлено имя менеджера для синхронизации продаж: ${previousSalesName || previousName} → ${correction.name}.` });
       }
       await client.query('UPDATE game_state SET data = $2::jsonb, updated_at = now() WHERE id = $1', [id, JSON.stringify(game)]);
       const normalizedAliases = [correction.name, ...correction.aliases].map(normalizeSalesName);
