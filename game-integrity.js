@@ -5,15 +5,13 @@ const CHECKPOINT_COINS = 5;
 const LAP_COINS = 2;
 const COLORS = new Set(['#286653','#cf744d','#6976b3','#af5980','#a19036','#448e9e','#795c9b','#6f8746']);
 const STEPS = { 'payment-low': 1, 'payment-mid': 2, 'payment-high': 4 };
-const ACTIVITY_ENABLED_NAMES = new Set([]);
 const integer = (value, min = 0, max = 1000000000) => Number.isSafeInteger(value) && value >= min && value <= max;
 const halfStep = value => Number.isFinite(value) && Number.isSafeInteger(value * 2);
 
 function without(object, keys) {
   return Object.fromEntries(Object.entries(object || {}).filter(([key]) => !keys.includes(key)));
 }
-function activityDayAllowed(key, player) {
-  if (!ACTIVITY_ENABLED_NAMES.has(player?.name?.trim().toLocaleLowerCase('ru-RU'))) return false;
+function activityDayAllowed(key) {
   const match = /^activity-(\d{4}-\d{2}-\d{2})$/.exec(key);
   if (!match) return false;
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Moscow' });

@@ -48,13 +48,13 @@ test('ordinary payment, cross-sale and a run save without admin access', () => {
   assert.equal(publicUpdateValid(before, after), true);
 });
 
-test('activity steps are rejected while activity buttons are closed', () => {
+test('a current activity day earns five steps before server credit consumption', () => {
   const before = fixture();
   const after = changed(before);
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Moscow' });
   after.players[0].actionCounts['activity-' + today] = 70;
   after.players[0].bank = 5;
-  assert.equal(publicUpdateValid(before, after), false);
+  assert.equal(publicUpdateValid(before, after), true);
 });
 
 test('power calls cannot be credited as public steps anymore', () => {

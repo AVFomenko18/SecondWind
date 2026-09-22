@@ -9,7 +9,7 @@ const end = html.indexOf('function movePlayer(count){', start);
 assert.ok(start >= 0 && end > start);
 
 function setup() {
-  const player = { name: 'Оля', bank: 0, cash: 0, cross: 0, calls: 0, actionCounts: {} };
+  const player = { id: 'p1', name: 'Оля', bank: 0, cash: 0, cross: 0, calls: 0, actionCounts: {} };
   const messages = [], animations = [];
   const confirmFields = { label: { textContent: '' }, gain: { textContent: '' } };
   const confirmButton = {
@@ -59,17 +59,20 @@ test('quick buttons credit calibrated steps without inventing cash amounts or di
   assert.deepEqual(animations.map(item => item.amount), [1, 2, 4]);
 });
 
-test('activity is closed while cross-sale still credits calibrated steps', () => {
-  const { context, player, messages } = setup();
-  context.creditQuickStep('activity');
-  context.creditQuickStep('activity');
+test('one activity credit unlocks one confirmed activity action', () => {
+  const { context, player } = setup();
+  context.salesCredits = { p1: { activity: 1 } };
+  context.salesCreditCount = (current, kind) => context.salesCredits[current.id]?.[kind] || 0;
+  context.salesActionLocked = (current, kind) => kind === 'activity' && context.salesCreditCount(current, kind) < 1;
+  context.requestQuickStep('activity');
+  context.confirmQuickStep();
   context.creditQuickStep('cross');
   context.creditQuickStep('powerCalls');
-  assert.equal(player.bank, 2);
-  assert.equal(player.actionCounts['activity-2026-09-18'], undefined);
+  assert.equal(player.bank, 7);
+  assert.equal(player.actionCounts['activity-2026-09-18'], 70);
+  assert.equal(context.salesCredits.p1.activity, 0);
   assert.equal(player.cross, 1);
   assert.equal(player.calls, 0);
-  assert.ok(messages.some(text => text.includes('временно недоступна')));
 });
 
 test('game field shows payment, activity and cross-sale buttons without power calls', () => {

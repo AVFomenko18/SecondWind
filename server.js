@@ -12,6 +12,20 @@ const { Pool } = pg;
 const app = express();
 const ACTION_CREDIT_RESET_MIGRATION = '2026-09-21-reset-pending-action-credits-v2';
 const FOMENKO_ACTION_CREDIT_GRANT_MIGRATION = '2026-09-22-grant-alexander-fomenko-action-credits-v1';
+const ACTIVITY_CREDIT_GRANT_MIGRATION = '2026-09-22-grant-activity-70-percent-for-2026-09-21-v1';
+const ACTIVITY_CREDIT_GRANTS = Object.freeze({
+  fomenko: ['Попова Анастасия', 'Мишин Иван'],
+  shabanov: ['Константинова Екатерина', 'Левченко Владислав', 'Пименова Виктория', 'Тихомирова Алина'],
+  lvovsky: ['Кузнецова Екатерина', 'Шмаков Юрий', 'Зыбченко Анастасия', 'Сопилкина Наталья', 'Соловьева Светлана'],
+  kozhanov: ['Печинога Валерия', 'Шеханова Лилия', 'Негреева Диана'],
+  kulikov: ['Ильина Диана', 'Кухто Арина', 'Беспалов Евгений', 'Забродская Карина'],
+  kondratyev: ['Рассомакин Иван', 'Руденко Оксана', 'Шапошникова Натали', 'Шевелева Ксения'],
+  otrakusha: ['Лобков Артур', 'Мартышкина Ольга', 'Пасхалиди Дмитрий'],
+  chekhova: ['Турулёва Дарья', 'Шарапова Анастасия'],
+  tolstov: ['Прохорова Василиса', 'Гусев Кирилл', 'Романова Людмила', 'Квон Екатерина', 'Умнова Виктория'],
+  bagaturiya: ['Белеева Мария', 'Степанов Петр', 'Лем Станислав', 'Михайлова Карина', 'Бруковски Александра', 'Золотарев Игорь'],
+  klimentovich: ['Шум Карина', 'Яловеин Николай', 'Гончарова Ирина', 'Зинкевич Елизавета']
+});
 
 const NEW_SHOP_PRIZES = Object.freeze([
   { id: 'prize-20', name: 'Day off · дополнительный выходной', cost: 7, enabled: true },
@@ -346,6 +360,47 @@ async function grantFomenkoActionCredits() {
     client.release();
   }
 }
+
+async function grantActivityCredits() {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const games = await client.query('SELECT id, data FROM game_state WHERE id = ANY($1::int[]) FOR UPDATE', [Object.values(teamIds)]);
+    const gamesById = new Map(games.rows.map(row => [Number(row.id), row.data]));
+    const grants = [];
+    for (const [teamKey, names] of Object.entries(ACTIVITY_CREDIT_GRANTS)) {
+      const id = teamIds[teamKey];
+      const players = gamesById.get(id)?.players || [];
+      for (const name of names) {
+        const player = players.find(item => normalizeSalesName(item.name) === normalizeSalesName(name));
+        if (!player) throw new Error(`ACTIVITY_PLAYER_NOT_FOUND:${teamKey}:${name}`);
+        grants.push({ teamId: id, player });
+      }
+    }
+    const claimed = await client.query(
+      'INSERT INTO app_migrations (id) VALUES ($1) ON CONFLICT DO NOTHING RETURNING id',
+      [ACTIVITY_CREDIT_GRANT_MIGRATION]
+    );
+    if (!claimed.rows.length) {
+      await client.query('ROLLBACK');
+      return;
+    }
+    let messageId = 1;
+    for (const { teamId: id, player } of grants) await client.query(`
+      INSERT INTO telegram_action_credits
+        (chat_id, message_id, source_bot_id, manager_name, normalized_name, action_kind, amount, team_id, player_id, status, raw_text)
+      VALUES ($1,$2,$3,$4,$5,'activity',70,$6,$7,'pending',$8)
+    `, [`manual:${ACTIVITY_CREDIT_GRANT_MIGRATION}`, messageId++, 'manual-dashboard', player.name,
+      normalizeSalesName(player.name), id, player.id,
+      'Активность 70%+ за 21.09.2026 подтверждена по дашборду Simba.']);
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+}
 function teamId(req, res) {
   const key = req.query.team ?? 'fomenko';
   if (typeof key !== 'string' || !Object.hasOwn(teamIds, key)) {
@@ -366,6 +421,7 @@ function salesActionDeltas(before, after) {
     const old = before?.players?.find(item => item.id === player.id);
     if (!old) continue;
     for (const [kind, key] of keys) for (let count = 0; count < (player.actionCounts?.[key] || 0) - (old.actionCounts?.[key] || 0); count++) changes.push({ kind, playerId: player.id });
+    for (const key of Object.keys(player.actionCounts || {})) if (/^activity-\d{4}-\d{2}-\d{2}$/.test(key) && !Object.hasOwn(old.actionCounts || {}, key)) changes.push({ kind: 'activity', playerId: player.id });
     for (let count = 0; count < player.cross - old.cross; count++) changes.push({ kind: 'cross', playerId: player.id });
   }
   return changes;
@@ -415,7 +471,7 @@ function ensureTable() {
           source_bot_id text NOT NULL,
           manager_name text NOT NULL,
           normalized_name text NOT NULL,
-          action_kind text NOT NULL CHECK (action_kind IN ('cashLow','cashMid','cashHigh','cross')),
+          action_kind text NOT NULL CHECK (action_kind IN ('cashLow','cashMid','cashHigh','cross','activity')),
           amount bigint NOT NULL CHECK (amount > 0),
           team_id integer,
           player_id text,
@@ -425,6 +481,20 @@ function ensureTable() {
           consumed_at timestamptz,
           UNIQUE (chat_id, message_id)
         )
+      `);
+      await pool.query(`
+        DO $$ BEGIN
+          IF EXISTS (
+            SELECT 1 FROM pg_constraint
+            WHERE conrelid = 'telegram_action_credits'::regclass
+              AND conname = 'telegram_action_credits_action_kind_check'
+              AND pg_get_constraintdef(oid) NOT LIKE '%activity%'
+          ) THEN
+            ALTER TABLE telegram_action_credits DROP CONSTRAINT telegram_action_credits_action_kind_check;
+            ALTER TABLE telegram_action_credits ADD CONSTRAINT telegram_action_credits_action_kind_check
+              CHECK (action_kind IN ('cashLow','cashMid','cashHigh','cross','activity'));
+          END IF;
+        END $$
       `);
       await pool.query(`
         WITH claimed AS (
@@ -472,6 +542,7 @@ function ensureTable() {
       await pool.query('UPDATE department_shop SET data = $1::jsonb WHERE id = 1', [JSON.stringify(catalog)]);
       await seedDepartmentRosters(catalog, currentRules);
       await grantFomenkoActionCredits();
+      await grantActivityCredits();
       for (const item of catalog.filter(item => item.superPrize)) {
         const id = item.id;
         await pool.query(`
@@ -601,7 +672,6 @@ app.post('/api/telegram/webhook', async (req, res) => {
 app.get('/api/action-credits', async (req, res) => {
   const id = teamId(req, res);
   if (id === null) return;
-  if (!telegramConfigured()) return res.json({ configured: false, credits: {} });
   try {
     await ensureTable();
     const result = await pool.query(`
@@ -616,7 +686,7 @@ app.get('/api/action-credits', async (req, res) => {
       credits[row.player_id][row.action_kind] = Number(row.count);
     }
     res.setHeader('Cache-Control', 'no-store');
-    res.json({ configured: true, credits });
+    res.json({ configured: telegramConfigured(), credits });
   } catch (error) {
     databaseError(res, error);
   }
@@ -895,7 +965,7 @@ app.post('/api/game-state', async (req, res) => {
       return res.status(409).json({ error: 'Мини-челлендж «Мощный дожим» можно подтвердить только один раз в день для каждого менеджера.' });
     }
     const salesActions = salesActionDeltas(before, req.body);
-    if (telegramConfigured()) for (const salesAction of salesActions) {
+    for (const salesAction of salesActions) if (salesAction.kind === 'activity' || telegramConfigured()) {
       const credit = await client.query(`
         WITH chosen AS (
           SELECT id FROM telegram_action_credits
@@ -909,7 +979,7 @@ app.post('/api/game-state', async (req, res) => {
       `, [id, salesAction.playerId, salesAction.kind]);
       if (!credit.rows.length) {
         await client.query('ROLLBACK');
-        return res.status(409).json({ error: 'Для этого действия нет нового подтверждения из чата продаж.' });
+        return res.status(409).json({ error: salesAction.kind === 'activity' ? 'Для этого дня нет подтверждённой активности 70%+.' : 'Для этого действия нет нового подтверждения из чата продаж.' });
       }
     }
     if (!Array.isArray(req.body?.players) || req.body.players.some(player =>
@@ -1017,7 +1087,7 @@ app.post('/api/game-state', async (req, res) => {
         UPDATE telegram_action_credits
         SET status = 'consumed', consumed_at = now()
         WHERE team_id = $1 AND status = 'pending'
-          AND action_kind IN ('cashLow','cashMid','cashHigh','cross')
+          AND action_kind IN ('cashLow','cashMid','cashHigh','cross','activity')
       `, [id]);
     }
     await client.query(
