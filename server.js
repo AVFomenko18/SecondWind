@@ -1157,6 +1157,52 @@ app.get('/api/reward-feed', async (_req, res) => {
   }
 });
 
+// Resolved chest rounds for operational statistics. The game UI does not use this feed,
+// but it lets the administrator distinguish direct rewards from chest selections.
+app.get('/api/chest-feed', async (_req, res) => {
+  try {
+    await ensureTable();
+    const [roundResult, gameResult] = await Promise.all([
+      pool.query(`
+        SELECT team_id, request_id, player_id, resolved, created_at
+        FROM case_rounds
+        WHERE resolved IS NOT NULL
+        ORDER BY created_at DESC
+        LIMIT 1000
+      `),
+      pool.query('SELECT id, data FROM game_state WHERE id = ANY($1::int[])', [Object.values(teamIds)])
+    ]);
+    const teamsById = Object.fromEntries(Object.entries(teamIds).map(([key, id]) => [id, teamNames[key]]));
+    const playersByTeam = new Map(gameResult.rows.map(({ id, data }) => [id,
+      new Map((Array.isArray(data?.players) ? data.players : []).map(player => [player.id, player.name]))]));
+    const rounds = roundResult.rows.map(row => {
+      const selectedChest = row.resolved?.selectedChest;
+      const reveal = Array.isArray(row.resolved?.reveal) ? row.resolved.reveal : [];
+      if (!Number.isSafeInteger(selectedChest) || selectedChest < 0 || selectedChest > 2 || reveal.length !== 3) return null;
+      const chests = reveal.map((item, index) => ({
+        number: index + 1,
+        type: item?.type,
+        title: item?.title,
+        selected: index === selectedChest
+      }));
+      if (chests.some(item => !['super', 'souvenir', 'ordinary'].includes(item.type) || typeof item.title !== 'string')) return null;
+      return {
+        id: `${row.team_id}:${row.request_id}`,
+        team: teamsById[row.team_id] || 'Команда',
+        player: playersByTeam.get(row.team_id)?.get(row.player_id) || 'Участник',
+        at: row.resolved?.reward?.at || row.created_at,
+        selectedChest: selectedChest + 1,
+        selected: { type: chests[selectedChest].type, title: chests[selectedChest].title },
+        chests
+      };
+    }).filter(Boolean);
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ rounds });
+  } catch (error) {
+    databaseError(res, error);
+  }
+});
+
 // Сохранить состояние
 app.post('/api/game-state', async (req, res) => {
   const id = teamId(req, res);
