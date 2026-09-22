@@ -35,3 +35,8 @@ test('department counts all payment buttons and previous recorded payments', () 
   assert.doesNotMatch(department, /key:'revenue'/);
   assert.doesNotMatch(department, /Выручка месяца/);
 });
+
+test('department ranking filters omit the calls tab', () => {
+  const department = readFileSync(new URL('../department.html', import.meta.url), 'utf8');
+  assert.match(department, /METRICS\.filter\(metric=>metric\.key!==['"]calls['"]\)\.map/);
+});
