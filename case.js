@@ -1,9 +1,14 @@
 import { randomInt } from 'node:crypto';
 
 export const CASE_COST = 2;
-export const SUPER_CHEST_CHANCE = 0.045;
+const PREVIOUS_SUPER_CHEST_CHANCE = 0.045;
+export const SUPER_CHEST_CHANCE = PREVIOUS_SUPER_CHEST_CHANCE * 3;
 export const SOUVENIR_SECTORS = 3;
 export const SOUVENIR_WEIGHT_MULTIPLIER = 10;
+export const SPORTS_REWARD_CHANCE = (1 - PREVIOUS_SUPER_CHEST_CHANCE) / (1 + SOUVENIR_WEIGHT_MULTIPLIER) + PREVIOUS_SUPER_CHEST_CHANCE / 3;
+export const MINI_PRIZE_CHANCE = 1 - SPORTS_REWARD_CHANCE - SUPER_CHEST_CHANCE / 3;
+const NON_CHEST_SPORTS_CHANCE = (SPORTS_REWARD_CHANCE - SUPER_CHEST_CHANCE / 3) / (1 - SUPER_CHEST_CHANCE);
+const CATEGORY_DRAW_SCALE = 1_000_000;
 export const MINI_PRIZES = Object.freeze([
   { id: 'mini-bank-charm', name: 'Оберег от отказов банка', icon: '🧿' },
   { id: 'mini-garlic', name: 'Чеснок для отпугивания CCC клиентов', icon: '🧄' },
@@ -45,16 +50,14 @@ export function drawCaseOutcome(items, drawRandom = randomInt) {
   const ordinary = items.filter(item => !item.superPrize);
   const superPrizes = items.filter(item => item.superPrize);
   if (!ordinary.length && !superPrizes.length) return null;
-  const chestRound = superPrizes.length && ordinary.length && drawRandom(1000) < SUPER_CHEST_CHANCE * 1000;
+  const chestEligible = Boolean(superPrizes.length && ordinary.length);
+  const chestRound = chestEligible && drawRandom(1000) < SUPER_CHEST_CHANCE * 1000;
   if (chestRound) return { phase: 'chests', prize: drawCasePrize(superPrizes, drawRandom) };
-  const ordinaryWeight = ordinary.reduce((sum, item) => sum + item.weight, 0);
-  const souvenirWeight = ordinaryWeight ? ordinaryWeight * SOUVENIR_WEIGHT_MULTIPLIER : SOUVENIR_SECTORS;
-  const souvenirSectors = Array.from({ length: SOUVENIR_SECTORS }, (_, index) =>
-    ({ id: `souvenir-sector-${index}`, weight: Math.floor(souvenirWeight / SOUVENIR_SECTORS) + (index < souvenirWeight % SOUVENIR_SECTORS ? 1 : 0), souvenirSector: true }));
-  const drawn = drawCasePrize([...ordinary, ...souvenirSectors], drawRandom);
-  return drawn.souvenirSector
-    ? { phase: 'reward', prize: MINI_PRIZES[drawRandom(MINI_PRIZES.length)], souvenir: true }
-    : { phase: 'reward', prize: drawn };
+  const sportsChance = chestEligible ? NON_CHEST_SPORTS_CHANCE : 1 / (1 + SOUVENIR_WEIGHT_MULTIPLIER);
+  const sportsReward = ordinary.length && drawRandom(CATEGORY_DRAW_SCALE) < Math.round(sportsChance * CATEGORY_DRAW_SCALE);
+  return sportsReward
+    ? { phase: 'reward', prize: drawCasePrize(ordinary, drawRandom) }
+    : { phase: 'reward', prize: MINI_PRIZES[drawRandom(MINI_PRIZES.length)], souvenir: true };
 }
 
 export function createChestRound(prize, ordinaryPrizes, drawRandom = randomInt) {
