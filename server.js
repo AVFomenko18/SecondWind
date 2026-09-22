@@ -405,15 +405,21 @@ async function grantFomenkoActionCredits() {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const current = await client.query('SELECT data FROM game_state WHERE id = $1 FOR UPDATE', [teamIds.fomenko]);
-    const player = current.rows[0]?.data?.players?.find(item => normalizeSalesName(item.name) === normalizeSalesName('Александр Фоменко'));
-    if (!player) throw new Error('ALEXANDER_FOMENKO_NOT_FOUND');
     const claimed = await client.query(
       'INSERT INTO app_migrations (id) VALUES ($1) ON CONFLICT DO NOTHING RETURNING id',
       [FOMENKO_ACTION_CREDIT_GRANT_MIGRATION]
     );
     if (!claimed.rows.length) {
       await client.query('ROLLBACK');
+      return;
+    }
+    const current = await client.query('SELECT data FROM game_state WHERE id = $1 FOR UPDATE', [teamIds.fomenko]);
+    const player = current.rows[0]?.data?.players?.find(item => normalizeSalesName(item.name) === normalizeSalesName('Александр Фоменко'));
+    // This was a one-off manual grant. A manager may already have been removed
+    // when a fresh service instance reruns startup migrations; that must not
+    // make every game-state endpoint unavailable.
+    if (!player) {
+      await client.query('COMMIT');
       return;
     }
     const kinds = [
