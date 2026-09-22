@@ -1006,6 +1006,8 @@ app.get('/api/reward-feed', async (_req, res) => {
           cost: reward.cost,
           case: reward.case === true,
           superPrize: countedReward(reward),
+          miniPrize: reward.miniPrize === true,
+          souvenir: reward.souvenir === true,
           at: reward.at
         }));
     }).filter(entry => typeof entry.title === 'string' && Number.isSafeInteger(entry.cost) && Number.isFinite(Date.parse(entry.at)))

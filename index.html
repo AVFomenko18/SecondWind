@@ -60,7 +60,7 @@ header .header-settings{flex:0 0 auto;margin-right:12px;padding:10px 14px;backgr
 .hero.has-reward-feed:not(.has-challenges){display:grid;grid-template-columns:minmax(250px,.55fr) minmax(320px,1fr);gap:22px;align-items:center}
 .reward-feed{min-width:0;width:100%;max-width:960px;height:370px;display:flex;flex-direction:column;padding:12px;background:#244d3c;border:4px double #9ba779;border-radius:10px;box-shadow:4px 5px 0 #d6d0b8;color:#fff4cd}
 .reward-feed[hidden]{display:none}.reward-feed-head{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:2px 6px 10px;font-size:15px;font-weight:800;letter-spacing:.3px}.reward-feed-head small{font-size:11px;font-weight:500;color:#c8d8bf;white-space:nowrap}
-.reward-feed-list{min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-color:#bd9e5d #244d3c;padding:0 3px 2px}.reward-feed-item{margin:0 0 8px;padding:10px 12px;border:1px solid #a8b794;border-radius:8px;background:#f9f2dd;color:#254536;line-height:1.4;font-size:13px}.reward-feed-item b{font-weight:800}.reward-feed-item time{display:block;margin-top:5px;font-size:10px;color:#6a7568}.reward-feed-item.super{border:2px solid #ffd05d;background:linear-gradient(110deg,#7a4415,#a76313 50%,#663a10);color:#fff8cf;box-shadow:0 0 13px #ffd35b88}.reward-feed-item.super b,.reward-feed-item.super strong{color:#ffe275;text-shadow:0 0 8px #fff4a688}.reward-feed-item.super time{color:#ffdfaa}.reward-feed-empty{padding:20px 12px;text-align:center;color:#e3e4c8;font-size:13px}
+.reward-feed-list{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;scrollbar-color:#bd9e5d #244d3c;padding:0 3px 2px}.reward-feed-item{margin:0 0 8px;padding:10px 12px;border:1px solid #a8b794;border-radius:8px;background:#f9f2dd;color:#254536;line-height:1.4;font-size:13px}.reward-feed-item b{font-weight:800}.reward-feed-item time{display:block;margin-top:5px;font-size:10px;color:#6a7568}.reward-feed-kind{display:inline-flex;margin:0 0 6px;padding:3px 7px;border-radius:999px;font-size:9px;font-weight:900;letter-spacing:.7px}.reward-feed-item.sport{border-left:5px solid #c9952e;background:#fff1c9}.reward-feed-item.sport .reward-feed-kind{background:#e3b44c;color:#244536}.reward-feed-item.mini{border-left:5px solid #6f9b87;background:#edf5e9}.reward-feed-item.mini .reward-feed-kind{background:#ccdfd0;color:#275442}.reward-feed-item.super{border:2px solid #ffd05d;background:linear-gradient(110deg,#7a4415,#a76313 50%,#663a10);color:#fff8cf;box-shadow:0 0 13px #ffd35b88}.reward-feed-item.super b,.reward-feed-item.super strong{color:#ffe275;text-shadow:0 0 8px #fff4a688}.reward-feed-item.super time{color:#ffdfaa}.reward-feed-empty{padding:20px 12px;text-align:center;color:#e3e4c8;font-size:13px}
 @media(max-width:1450px){.hero.has-challenges{grid-template-columns:minmax(230px,.7fr) minmax(320px,1.3fr)}.hero-challenges{grid-column:1/-1;justify-self:stretch;max-width:none;margin-top:0}}
 @media(max-width:950px){.hero.has-challenges,.hero.has-reward-feed:not(.has-challenges){grid-template-columns:1fr}.reward-feed{height:320px}.hero-challenges{grid-column:auto}}
 
@@ -133,7 +133,7 @@ header .header-team-navigation .team-tabs{width:100%;flex:0 0 auto;justify-conte
 @media(min-width:1451px){
   .hero.has-challenges{grid-template-columns:minmax(280px,.48fr) minmax(500px,1.12fr) minmax(0,560px);align-items:stretch;gap:16px}
   .hero.has-challenges>div:first-child{display:flex;flex-direction:column;justify-content:center}
-  .hero.has-challenges .reward-feed{height:auto;min-height:292px;max-width:none}
+  .hero.has-challenges .reward-feed{height:292px;min-height:0;max-width:none}
   .hero.has-challenges .hero-challenges{max-width:none;margin-top:0;gap:8px;padding:10px}
   .hero.has-challenges .hero-challenge-group-title{margin-bottom:6px;font-size:9px}
   .hero.has-challenges .hero-challenge-grid{gap:7px}
@@ -303,7 +303,9 @@ async function loadRewardFeed(){
         const cost=Number(item.cost)||0;
         const verb=item.case?'открыл(а)':'купил(а)';
         const when=new Date(item.at).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
-        return '<article class="reward-feed-item '+(item.superPrize?'super':'')+'">'+(item.superPrize?'<strong>✨ СУПЕР-ПРИЗ ✨</strong><br>':'')+'<b>'+esc(item.player)+'</b> '+(item.case?verb+' кейс за '+cost+' '+coinWord(cost)+' '+COIN_ICON+' и получил(а) «'+esc(item.title)+'»':verb+' «'+esc(item.title)+'» за '+cost+' '+coinWord(cost)+' '+COIN_ICON+'')+'<time>'+esc(when)+' · команда '+esc(item.team)+'</time></article>';
+        const category=item.superPrize?'super':item.miniPrize?'mini':item.case?'sport':'purchase';
+        const kind=category==='sport'?'СПОРТИВНАЯ НАГРАДА':category==='mini'?'МИНИ-ПРИЗ':'';
+        return '<article class="reward-feed-item '+category+'">'+(item.superPrize?'<strong>✨ СУПЕР-ПРИЗ ✨</strong><br>':kind?'<span class="reward-feed-kind">'+kind+'</span><br>':'')+'<b>'+esc(item.player)+'</b> '+(item.case?verb+' кейс за '+cost+' '+coinWord(cost)+' '+COIN_ICON+' и получил(а) «'+esc(item.title)+'»':verb+' «'+esc(item.title)+'» за '+cost+' '+coinWord(cost)+' '+COIN_ICON+'')+'<time>'+esc(when)+' · команда '+esc(item.team)+'</time></article>';
       }).join(''):'<p class="reward-feed-empty">Покупок пока нет. Первая награда скоро появится здесь.</p>';
       if(wasAtTop)list.scrollTop=0;
     }
