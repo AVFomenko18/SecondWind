@@ -15,6 +15,7 @@ const FOMENKO_ACTION_CREDIT_GRANT_MIGRATION = '2026-09-22-grant-alexander-fomenk
 const ACTIVITY_CREDIT_GRANT_MIGRATION = '2026-09-22-grant-activity-70-percent-for-2026-09-21-v1';
 const MANAGER_NAME_SYNC_MIGRATION = '2026-09-22-correct-four-manager-names-and-resync-v1';
 const SUPER_PRIZE_LIMITS_MIGRATION = '2026-09-22-update-super-prize-limits-v1';
+const CERTIFICATE_DEMO_STOCK_MIGRATION = '2026-09-22-reset-demo-certificate-stock-v1';
 const ACTIVITY_CREDIT_GRANTS = Object.freeze({
   fomenko: ['Попова Анастасия', 'Мишин Иван'],
   shabanov: ['Константинова Екатерина', 'Левченко Владислав', 'Пименова Виктория', 'Тихомирова Алина'],
@@ -641,6 +642,16 @@ function ensureTable() {
               limit_count = EXCLUDED.limit_count
         `, [id, item.stockLimit, Object.hasOwn(INITIAL_SUPER_PRIZE_LIMITS, id)]);
       }
+      await pool.query(`
+        WITH applied AS (
+          INSERT INTO app_migrations (id) VALUES ($1)
+          ON CONFLICT DO NOTHING
+          RETURNING id
+        )
+        UPDATE super_prize_inventory
+        SET purchased = 0
+        WHERE prize_id = 'prize-8' AND EXISTS (SELECT 1 FROM applied)
+      `, [CERTIFICATE_DEMO_STOCK_MIGRATION]);
       for (const prize of NEW_SHOP_PRIZES) {
         await pool.query(`
           UPDATE game_state
