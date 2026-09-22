@@ -4,7 +4,7 @@ const CHECKPOINT_EVERY = 6;
 const CHECKPOINT_COINS = 3;
 const LAP_COINS = 6;
 const COLORS = new Set(['#286653','#cf744d','#6976b3','#af5980','#a19036','#448e9e','#795c9b','#6f8746']);
-const STEPS = { 'payment-low': 1, 'payment-mid': 2, 'payment-high': 4 };
+const STEPS = { 'payment-low': 1, 'payment-mid': 2, 'payment-high': 3 };
 const integer = (value, min = 0, max = 1000000000) => Number.isSafeInteger(value) && value >= min && value <= max;
 const halfStep = value => Number.isFinite(value) && Number.isSafeInteger(value * 2);
 
@@ -174,7 +174,7 @@ function earnedStepsForPlayer(oldPlayer, player, actions) {
       earned += change * 2;
     } else if (activityDayAllowed(key, player)) {
       if (previous !== 0 || next !== 70) return null;
-      earned += 5;
+      earned += 3;
     } else {
       const action = actions.find(item => item.id === key && item.enabled);
       if (!action || change > 1000000) return null;

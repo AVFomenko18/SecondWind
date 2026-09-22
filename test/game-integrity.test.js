@@ -32,7 +32,7 @@ test('ordinary payment, cross-sale and a run save without admin access', () => {
   for (const mutate of [
     next => { next.players[0].actionCounts['payment-low'] = 1; next.players[0].bank = 1; },
     next => { next.players[0].actionCounts['payment-mid'] = 1; next.players[0].bank = 2; },
-    next => { next.players[0].actionCounts['payment-high'] = 1; next.players[0].bank = 4; },
+    next => { next.players[0].actionCounts['payment-high'] = 1; next.players[0].bank = 3; },
     next => { next.players[0].cross = 1; next.players[0].bank = 2; }
   ]) {
     const before = fixture();
@@ -48,12 +48,12 @@ test('ordinary payment, cross-sale and a run save without admin access', () => {
   assert.equal(publicUpdateValid(before, after), true);
 });
 
-test('a current activity day earns five steps before server credit consumption', () => {
+test('a current activity day earns three steps before server credit consumption', () => {
   const before = fixture();
   const after = changed(before);
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Moscow' });
   after.players[0].actionCounts['activity-' + today] = 70;
-  after.players[0].bank = 5;
+  after.players[0].bank = 3;
   assert.equal(publicUpdateValid(before, after), true);
 });
 
