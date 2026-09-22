@@ -826,6 +826,101 @@ app.get('/api/action-credits', async (req, res) => {
   }
 });
 
+app.post('/api/admin/player-adjustments', async (req, res) => {
+  const id = teamId(req, res);
+  if (id === null) return;
+  if (!sameOrigin(req)) return res.status(403).json({ error: 'Недопустимый источник запроса.' });
+  if (!isAdmin(req)) return res.status(403).json({ error: 'Корректировать шаги и активность может только руководитель группы.' });
+  const adjustments = req.body?.adjustments;
+  if (!Array.isArray(adjustments) || adjustments.length > 40 || adjustments.some(item =>
+      !item || typeof item.playerId !== 'string' || item.playerId.length < 1 || item.playerId.length > 100 ||
+      !Number.isFinite(item.bank) || item.bank < 0 || item.bank > 100000000 || !Number.isSafeInteger(item.bank * 2) ||
+      !Number.isSafeInteger(item.activityCredits) || item.activityCredits < 0 || item.activityCredits > 1000) ||
+      new Set(adjustments.map(item => item.playerId)).size !== adjustments.length) {
+    return res.status(422).json({ error: 'Проверьте шаги и количество доступных подтверждений активности.' });
+  }
+  let client;
+  try {
+    await ensureTable();
+    client = await pool.connect();
+    await client.query('BEGIN');
+    const [catalogResult, rulesResult, current] = await Promise.all([
+      client.query('SELECT data FROM department_shop WHERE id = 1'),
+      client.query('SELECT data FROM department_rules WHERE id = 1'),
+      client.query('SELECT data FROM game_state WHERE id = $1 FOR UPDATE', [id])
+    ]);
+    const raw = current.rows[0]?.data;
+    if (!raw || !Array.isArray(raw.players)) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Сначала создайте и сохраните команду.' });
+    }
+    const before = withDepartmentConfig(raw, catalogResult.rows[0].data, rulesResult.rows[0].data);
+    if (req.get('if-match') !== stateETag(before)) {
+      await client.query('ROLLBACK');
+      return res.status(412).json({ error: 'Данные команды изменились в другой вкладке. Обновите страницу.' });
+    }
+    const players = new Map(raw.players.map(player => [player.id, player]));
+    if (adjustments.length !== players.size || adjustments.some(item => !players.has(item.playerId))) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'Состав команды изменился. Обновите страницу и повторите.' });
+    }
+    const changes = [];
+    for (const adjustment of adjustments) {
+      const player = players.get(adjustment.playerId);
+      const credits = await client.query(`
+        SELECT id FROM telegram_action_credits
+        WHERE team_id = $1 AND player_id = $2 AND action_kind = 'activity' AND status = 'pending'
+        ORDER BY created_at, id FOR UPDATE
+      `, [id, player.id]);
+      const oldBank = Number(player.bank);
+      const oldActivityCredits = credits.rows.length;
+      if (oldBank === adjustment.bank && oldActivityCredits === adjustment.activityCredits) continue;
+      player.bank = adjustment.bank;
+      if (adjustment.activityCredits < oldActivityCredits) {
+        const surplus = credits.rows.slice(adjustment.activityCredits).map(row => row.id);
+        await client.query(`
+          UPDATE telegram_action_credits
+          SET status = 'consumed', consumed_at = now(),
+              raw_text = raw_text || ' Снято ручной корректировкой руководителя.'
+          WHERE id = ANY($1::bigint[])
+        `, [surplus]);
+      } else {
+        for (let index = oldActivityCredits; index < adjustment.activityCredits; index++) {
+          await client.query(`
+            INSERT INTO telegram_action_credits
+              (chat_id, message_id, source_bot_id, manager_name, normalized_name, action_kind, amount, team_id, player_id, status, raw_text)
+            VALUES ($1,1,'admin',$2,$3,'activity',70,$4,$5,'pending',$6)
+          `, [`admin-activity-${randomUUID()}`, player.name, normalizeSalesName(player.salesName || player.name), id, player.id,
+            `Ручная корректировка руководителя: доступно за активность ${adjustment.activityCredits}.`]);
+        }
+      }
+      changes.push(`${player.name}: шаги ${String(oldBank).replace('.', ',')} → ${String(adjustment.bank).replace('.', ',')}, активность ${oldActivityCredits} → ${adjustment.activityCredits}`);
+    }
+    if (changes.length) {
+      const now = new Date().toISOString();
+      raw.updated = now;
+      raw.logs.unshift({ id: randomUUID(), at: now, text: `Ручная корректировка руководителя. ${changes.join('; ')}` });
+      await client.query('UPDATE game_state SET data = $2::jsonb, updated_at = now() WHERE id = $1', [id, JSON.stringify(raw)]);
+    }
+    const activityRows = await client.query(`
+      SELECT player_id, COUNT(*)::integer AS count
+      FROM telegram_action_credits
+      WHERE team_id = $1 AND action_kind = 'activity' AND status = 'pending'
+      GROUP BY player_id
+    `, [id]);
+    await client.query('COMMIT');
+    const next = withDepartmentConfig(raw, catalogResult.rows[0].data, rulesResult.rows[0].data);
+    res.setHeader('ETag', stateETag(next));
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ ok: true, state: next, activityCredits: Object.fromEntries(activityRows.rows.map(row => [row.player_id, Number(row.count)])) });
+  } catch (error) {
+    if (client) await client.query('ROLLBACK').catch(() => {});
+    databaseError(res, error);
+  } finally {
+    client?.release();
+  }
+});
+
 app.get('/api/department-rules', async (_req, res) => {
   try {
     await ensureTable();
