@@ -77,7 +77,7 @@ header .header-team-navigation .team-tabs{width:100%;flex:0 0 auto;justify-conte
     function value(amount,metric){return amount===null||amount===undefined?'—':number.format(amount)+' '+(METRICS.find(item=>item.key===metric)?.unit||'')}
     function sorted(items,metric){return [...items].sort((a,b)=>(b[metric]||0)-(a[metric]||0)||(b.payments||0)-(a.payments||0)||a.name.localeCompare(b.name,'ru'))}
     function managers(){return teams.flatMap(team=>team.players.map(player=>({...player,teamKey:team.key,teamName:team.name})))}
-    function totals(){return teams.reduce((sum,team)=>{sum.managers+=team.players.length;for(const metric of METRICS)sum[metric.key]+=team.totals[metric.key]||0;return sum},{managers:0,payments:0,laps:0,steps:0,calls:0,crossSales:0,coins:0})}
+    function totals(){return teams.reduce((sum,team)=>{sum.managers+=team.players.length;for(const metric of METRICS)sum[metric.key]+=team.totals[metric.key]||0;return sum},{managers:0,payments:0,laps:0,steps:0,activityDays:0,crossSales:0,coins:0})}
     function draw(){
       const all=managers(),total=totals();
       document.getElementById('summary').innerHTML=[['Менеджеры',number.format(total.managers)],['Оплаты',value(total.payments,'payments')],['Шаги',value(total.steps,'steps')],['Дней с активностью 70+',value(total.activityDays,'activityDays')],['Кросс-сейлы',value(total.crossSales,'crossSales')],['Монетки',value(total.coins,'coins')]].map(([label,amount])=>`<div class="summary-card"><b>${amount}</b><span>${label}</span></div>`).join('');

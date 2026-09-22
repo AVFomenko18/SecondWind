@@ -41,6 +41,7 @@ test('department replaces calls with credited activity days', () => {
   const server = readFileSync(new URL('../server.js', import.meta.url), 'utf8');
   assert.doesNotMatch(department, /key:'calls'|label:'Звонки'/);
   assert.match(department, /key:'activityDays',label:'Дней с активностью 70\+'/);
+  assert.match(department, /\{managers:0,payments:0,laps:0,steps:0,activityDays:0,crossSales:0,coins:0\}/);
   assert.match(server, /activityDays: Object\.keys\(player\.actionCounts \|\| \{\}\)\.filter/);
   assert.match(server, /'activityDays'/);
 });
