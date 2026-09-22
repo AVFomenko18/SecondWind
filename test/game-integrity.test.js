@@ -44,7 +44,7 @@ test('ordinary payment, cross-sale and a run save without admin access', () => {
   before.players[0].bank = 7;
   const after = changed(before);
   after.players[0].pos = 7; after.players[0].high = 7; after.players[0].bank = 0;
-  after.ledger.push({ id: 'coin-6', playerId: 'p1', source: 'milestone', ref: '6', amount: 5, title: 'Рубеж 6', at });
+  after.ledger.push({ id: 'coin-6', playerId: 'p1', source: 'milestone', ref: '6', amount: 3, title: 'Рубеж 6', at });
   assert.equal(publicUpdateValid(before, after), true);
 });
 
@@ -74,7 +74,7 @@ test('ordinary users cannot forge money, position, awards or reward delivery', (
     next => { next.players[0].actionCounts['payment-low'] = 1; next.players[0].bank = 100; },
     next => { next.players[0].actionCounts['activity-2020-01-01'] = 70; next.players[0].bank = 5; },
     next => { next.players[0].calls = 300; next.players[0].bank = 1.5; },
-    next => { next.ledger.push({ id: 'coin', playerId: 'p1', source: 'milestone', ref: '6', amount: 5, title: 'Рубеж 6', at }); },
+    next => { next.ledger.push({ id: 'coin', playerId: 'p1', source: 'milestone', ref: '6', amount: 3, title: 'Рубеж 6', at }); },
     next => { next.rewards.push({ id: 'free', playerId: 'p1', title: 'Приз', claimed: true }); }
   ];
   for (const corrupt of corruptions) {
@@ -138,7 +138,7 @@ test('server accepts the browser rollback patch for a normal move', () => {
   before.players[0].bank = 7;
   const after = changed(before);
   after.players[0].pos = 7; after.players[0].high = 7; after.players[0].bank = 0;
-  after.ledger.push({ id: 'coin-6', playerId: 'p1', source: 'milestone', ref: '6', amount: 5, title: 'Рубеж 6', at });
+  after.ledger.push({ id: 'coin-6', playerId: 'p1', source: 'milestone', ref: '6', amount: 3, title: 'Рубеж 6', at });
   after.logs[0].reverse = context.makeReversePatch(before, after);
   assert.equal(publicUpdateValid(before, after), true);
 });

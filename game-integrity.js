@@ -1,8 +1,8 @@
 import { isDeepStrictEqual } from 'node:util';
 
 const CHECKPOINT_EVERY = 6;
-const CHECKPOINT_COINS = 5;
-const LAP_COINS = 2;
+const CHECKPOINT_COINS = 3;
+const LAP_COINS = 6;
 const COLORS = new Set(['#286653','#cf744d','#6976b3','#af5980','#a19036','#448e9e','#795c9b','#6f8746']);
 const STEPS = { 'payment-low': 1, 'payment-mid': 2, 'payment-high': 4 };
 const integer = (value, min = 0, max = 1000000000) => Number.isSafeInteger(value) && value >= min && value <= max;

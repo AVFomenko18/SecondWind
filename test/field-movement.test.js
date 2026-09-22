@@ -12,7 +12,7 @@ test('former boost, shield and cramp cells now move normally; milestones still p
   const state = { config: { milestones: [1, 1, 1, 1, 1] }, ledger: [] };
   const animations = [];
   const context = {
-    state, CHECKPOINT_EVERY: 6, CHECKPOINT_COINS: 5, LAP_COINS: 2, writable: () => true, pnow: () => player,
+    state, CHECKPOINT_EVERY: 6, CHECKPOINT_COINS: 3, LAP_COINS: 6, writable: () => true, pnow: () => player,
     num: (value, min, max) => Number.isSafeInteger(value) && value >= min && value <= max,
     actionAnchor: () => null, snapshot: () => {}, log: () => {}, commit: () => {},
     showEarnedPop: () => {}, toast: () => {}, medals: () => state.ledger.reduce((sum, entry) => sum + entry.amount, 0),
@@ -31,7 +31,7 @@ test('former boost, shield and cramp cells now move normally; milestones still p
   assert.equal(player.high, 16);
   assert.equal(player.shields, 1);
   assert.deepEqual(player.used, []);
-  assert.deepEqual(state.ledger.map(entry => [entry.ref, entry.amount]), [[6, 5], [12, 5]]);
+  assert.deepEqual(state.ledger.map(entry => [entry.ref, entry.amount]), [[6, 3], [12, 3]]);
 });
 
 test('run button spends the whole earned balance, beyond six steps and across laps', () => {
@@ -42,7 +42,7 @@ test('run button spends the whole earned balance, beyond six steps and across la
   const state = { config: { milestones: [1, 1, 1, 1, 1] }, ledger: [] };
   const animations = [];
   const context = {
-    state, CHECKPOINT_EVERY: 6, CHECKPOINT_COINS: 5, LAP_COINS: 2, writable: () => true, pnow: () => player,
+    state, CHECKPOINT_EVERY: 6, CHECKPOINT_COINS: 3, LAP_COINS: 6, writable: () => true, pnow: () => player,
     num: (value, min, max) => Number.isSafeInteger(value) && value >= min && value <= max,
     actionAnchor: () => null, snapshot: () => {}, log: () => {}, commit: () => {},
     showEarnedPop: () => {}, toast: () => {}, medals: () => state.ledger.length,
@@ -56,11 +56,11 @@ test('run button spends the whole earned balance, beyond six steps and across la
   assert.equal(player.pos, 75);
   assert.equal(player.bank, 0);
   assert.deepEqual(state.ledger.map(entry => entry.ref), [60, 66, 72]);
-  assert.deepEqual(state.ledger.map(entry => entry.amount), [2, 5, 5]);
+  assert.deepEqual(state.ledger.map(entry => entry.amount), [6, 3, 3]);
   assert.equal(animations[0][3], 75);
 });
 
-test('every completed lap pays exactly two coins, including multiple laps in one run', () => {
+test('every completed lap pays exactly six coins, including multiple laps in one run', () => {
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   const start = html.indexOf('function movePlayer(count){');
   const end = html.indexOf('\nfunction undo(){', start);
@@ -68,7 +68,7 @@ test('every completed lap pays exactly two coins, including multiple laps in one
   // Existing saved teams still have 1 in the old fifth-milestone setting.
   const state = { config: { milestones: [1, 1, 1, 1, 1] }, ledger: [] };
   const context = {
-    state, CHECKPOINT_EVERY: 6, CHECKPOINT_COINS: 5, LAP_COINS: 2, writable: () => true, pnow: () => player,
+    state, CHECKPOINT_EVERY: 6, CHECKPOINT_COINS: 3, LAP_COINS: 6, writable: () => true, pnow: () => player,
     num: (value, min, max) => Number.isSafeInteger(value) && value >= min && value <= max,
     actionAnchor: () => null, snapshot: () => {}, log: () => {}, commit: () => {},
     showEarnedPop: () => {}, toast: () => {}, medals: () => state.ledger.reduce((total, entry) => total + entry.amount, 0),
@@ -80,8 +80,8 @@ test('every completed lap pays exactly two coins, including multiple laps in one
   context.movePlayer();
   assert.equal(player.pos, 180);
   assert.equal(player.bank, 0);
-  assert.deepEqual(state.ledger.filter(entry => entry.ref % 60 === 0).map(entry => [entry.ref, entry.amount]), [[60, 2], [120, 2], [180, 2]]);
-  assert.equal(state.ledger.reduce((total, entry) => total + entry.amount, 0), 96);
+  assert.deepEqual(state.ledger.filter(entry => entry.ref % 60 === 0).map(entry => [entry.ref, entry.amount]), [[60, 6], [120, 6], [180, 6]]);
+  assert.equal(state.ledger.reduce((total, entry) => total + entry.amount, 0), 72);
 });
 
 test('long movement animation uses a bounded number of frames', () => {
