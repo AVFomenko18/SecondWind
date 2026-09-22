@@ -13,6 +13,7 @@ const app = express();
 const ACTION_CREDIT_RESET_MIGRATION = '2026-09-21-reset-pending-action-credits-v2';
 const FOMENKO_ACTION_CREDIT_GRANT_MIGRATION = '2026-09-22-grant-alexander-fomenko-action-credits-v1';
 const ACTIVITY_CREDIT_GRANT_MIGRATION = '2026-09-22-grant-activity-70-percent-for-2026-09-21-v1';
+const ZINKEVICH_PAYMENT_CREDIT_CORRECTION = '2026-09-22-move-zinkevich-high-payment-to-mid-v1';
 const MANAGER_NAME_SYNC_MIGRATION = '2026-09-22-correct-four-manager-names-and-resync-v1';
 const SUPER_PRIZE_LIMITS_MIGRATION = '2026-09-22-update-super-prize-limits-v1';
 const CERTIFICATE_DEMO_STOCK_MIGRATION = '2026-09-22-reset-demo-certificate-stock-v1';
@@ -487,6 +488,39 @@ async function grantActivityCredits() {
     client.release();
   }
 }
+
+async function correctZinkevichPaymentCredit() {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const claimed = await client.query(
+      'INSERT INTO app_migrations (id) VALUES ($1) ON CONFLICT DO NOTHING RETURNING id',
+      [ZINKEVICH_PAYMENT_CREDIT_CORRECTION]
+    );
+    if (!claimed.rows.length) {
+      await client.query('ROLLBACK');
+      return;
+    }
+    const current = await client.query('SELECT data FROM game_state WHERE id = $1 FOR UPDATE', [teamIds.klimentovich]);
+    const player = current.rows[0]?.data?.players?.find(item => normalizeSalesName(item.name) === normalizeSalesName('Зинкевич Елизавета'));
+    if (player) await client.query(`
+      UPDATE telegram_action_credits
+      SET action_kind = 'cashMid', amount = 50000,
+          raw_text = raw_text || ' Исправлено руководителем: оплата перенесена из 100 000+ в диапазон 50 000–99 999.'
+      WHERE id = (
+        SELECT id FROM telegram_action_credits
+        WHERE team_id = $1 AND player_id = $2 AND action_kind = 'cashHigh' AND status = 'pending'
+        ORDER BY created_at, id LIMIT 1
+      )
+    `, [teamIds.klimentovich, player.id]);
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+}
 function teamId(req, res) {
   const key = req.query.team ?? 'fomenko';
   if (typeof key !== 'string' || !Object.hasOwn(teamIds, key)) {
@@ -631,6 +665,7 @@ function ensureTable() {
       await correctManagerNamesAndResyncCredits();
       await grantFomenkoActionCredits();
       await grantActivityCredits();
+      await correctZinkevichPaymentCredit();
       for (const item of catalog.filter(item => item.superPrize)) {
         const id = item.id;
         await pool.query(`
