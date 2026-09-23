@@ -16,9 +16,9 @@ test('reward feed uses neutral verbs without guessing gender from names', async 
     { id: '3', player: 'Ирина', title: 'Кубик удачного распределения', cost: 2, case: true, team: 'Куликов', superPrize: false, miniPrize: true, at: '2026-09-18T08:00:00.000Z' }
   ];
   const context = {
-    rewardFeedLoading: false, rewardFeedSignature: '',
+    rewardFeedLoading: false, rewardFeedSignature: '', rewardFeedETag: '',
     document: { visibilityState: 'visible', getElementById: id => id === 'rewardFeedList' ? list : status },
-    fetch: async () => ({ ok: true, json: async () => ({ entries }) }),
+    fetch: async () => ({ ok: true, status: 200, headers: { get: () => '"feed-v1"' }, json: async () => ({ entries }) }),
     esc: value => String(value), coinWord: () => 'монеты',
     COIN_ICON: '<img class="coin-icon" src="assets/coin-ruble.svg" alt="монетка">'
   };
@@ -33,6 +33,7 @@ test('reward feed uses neutral verbs without guessing gender from names', async 
   assert.match(list.innerHTML, /Никита<\/b> открыл\(а\) кейс.*«Обед»/);
   assert.match(list.innerHTML, /Ирина<\/b> открыл\(а\) кейс.*«Кубик удачного распределения»/);
   assert.doesNotMatch(list.innerHTML, /открыла|купила/);
+  assert.equal(context.rewardFeedETag, '"feed-v1"');
 });
 
 test('reward feed API exposes prize categories used by the dashboard', () => {

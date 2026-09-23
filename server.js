@@ -175,6 +175,7 @@ function changesUsedRules(before, after, usage) {
 }
 
 app.use(express.json({ limit: '30mb' }));
+app.use('/assets', express.static('assets', { maxAge: '1y', immutable: true }));
 app.use(express.static('.'));
 
 const ADMIN_COOKIE = 'secondwind_admin';
