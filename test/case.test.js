@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CASE_COST, MINI_PRIZES, MINI_PRIZE_CHANCE, SOUVENIR_SECTORS, SOUVENIR_WEIGHT_MULTIPLIER, SPORTS_REWARD_CHANCE, SUPER_CHEST_CHANCE, casePool, drawCasePrize, drawCaseOutcome, createChestRound } from '../case.js';
+import { CASE_COST, MINI_PRIZES, MINI_PRIZE_CHANCE, SOUVENIR_SECTORS, SOUVENIR_WEIGHT_MULTIPLIER, SPORTS_REWARD_CHANCE, SUPER_CHEST_CHANCE, SUPER_PRIZE_CHANCE, casePool, drawCasePrize, drawCaseOutcome, createChestRound } from '../case.js';
 
 const shop = [
   { id: 'cheap', name: 'Обед', cost: 1, enabled: true, superPrize: false },
@@ -28,11 +28,11 @@ test('sold-out and disabled prizes cannot be drawn', () => {
   assert.equal(drawCasePrize([], () => 0), null);
 });
 
-test('thirteen and a half percent of eligible case openings enter the chest round', () => {
+test('six and three-quarter percent of eligible case openings enter the chest round', () => {
   const items = casePool(shop, [{ prize_id: 'rare', purchased: 0, limit_count: 5 }]);
-  assert.ok(Math.abs(SUPER_CHEST_CHANCE - 0.135) < Number.EPSILON);
-  assert.equal(drawCaseOutcome(items, max => max === 1000 ? 134 : 0).phase, 'chests');
-  assert.equal(drawCaseOutcome(items, max => max === 1000 ? 135 : 0).phase, 'reward');
+  assert.ok(Math.abs(SUPER_CHEST_CHANCE - 0.0675) < Number.EPSILON);
+  assert.equal(drawCaseOutcome(items, max => max === 1_000_000 ? 67_499 : 0).phase, 'chests');
+  assert.equal(drawCaseOutcome(items, max => max === 1_000_000 ? 67_500 : 0).phase, 'reward');
   assert.equal(drawCaseOutcome(casePool(shop, [{ prize_id: 'rare', purchased: 5, limit_count: 5 }]), () => 0).phase, 'reward');
 });
 
@@ -59,24 +59,23 @@ test('a guaranteed chest round still looks like a normal three-category round', 
 test('three souvenir sectors award a random souvenir without changing super chest odds', () => {
   const items = casePool(shop, [{ prize_id: 'rare', purchased: 0, limit_count: 5 }]);
   assert.equal(SOUVENIR_SECTORS, 3);
-  const picks = [500, 999999, 0];
+  const picks = [500_000, 999_999, 0];
   const first = drawCaseOutcome(items, () => picks.shift());
   assert.equal(first.phase, 'reward');
   assert.equal(first.souvenir, true);
   assert.equal(first.prize.id, MINI_PRIZES[0].id);
-  const secondPicks = [500, 999999, MINI_PRIZES.length - 1];
+  const secondPicks = [500_000, 999_999, MINI_PRIZES.length - 1];
   const second = drawCaseOutcome(items, () => secondPicks.shift());
   assert.equal(second.prize.id, MINI_PRIZES.at(-1).id);
 });
 
-test('tripled chest-round chance is taken only from the final mini-prize share', () => {
+test('halved super-prize chance returns its share to mini prizes', () => {
   assert.equal(SOUVENIR_WEIGHT_MULTIPLIER, 10);
-  const previousChestChance = SUPER_CHEST_CHANCE / 3;
-  const previousSportsChance = (1 - previousChestChance) / (1 + SOUVENIR_WEIGHT_MULTIPLIER) + previousChestChance / 3;
-  const previousMiniChance = 1 - previousSportsChance - previousChestChance / 3;
-  assert.ok(Math.abs(SPORTS_REWARD_CHANCE - previousSportsChance) < Number.EPSILON);
+  const previousSuperPrizeChance = SUPER_PRIZE_CHANCE * 2;
+  const previousMiniChance = 1 - SPORTS_REWARD_CHANCE - previousSuperPrizeChance;
   assert.ok(Math.abs(SPORTS_REWARD_CHANCE - 0.1018) < 0.0001);
-  assert.ok(Math.abs(MINI_PRIZE_CHANCE - 0.8532) < 0.0001);
-  assert.ok(Math.abs(previousMiniChance - MINI_PRIZE_CHANCE - 0.03) < 0.0001);
-  assert.ok(Math.abs(SUPER_CHEST_CHANCE / 3 - 0.045) < Number.EPSILON);
+  assert.ok(Math.abs(MINI_PRIZE_CHANCE - 0.8757) < 0.0001);
+  assert.ok(Math.abs(MINI_PRIZE_CHANCE - previousMiniChance - 0.0225) < Number.EPSILON);
+  assert.ok(Math.abs(SUPER_CHEST_CHANCE / 3 - SUPER_PRIZE_CHANCE) < Number.EPSILON);
+  assert.ok(Math.abs(SUPER_PRIZE_CHANCE - 0.0225) < Number.EPSILON);
 });

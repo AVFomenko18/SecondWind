@@ -1,11 +1,12 @@
 import { randomInt } from 'node:crypto';
 
 export const CASE_COST = 2;
-const PREVIOUS_SUPER_CHEST_CHANCE = 0.045;
-export const SUPER_CHEST_CHANCE = PREVIOUS_SUPER_CHEST_CHANCE * 3;
+const SPORTS_BALANCE_REFERENCE_CHEST_CHANCE = 0.045;
+export const SUPER_PRIZE_CHANCE = 0.0225;
+export const SUPER_CHEST_CHANCE = SUPER_PRIZE_CHANCE * 3;
 export const SOUVENIR_SECTORS = 3;
 export const SOUVENIR_WEIGHT_MULTIPLIER = 10;
-export const SPORTS_REWARD_CHANCE = (1 - PREVIOUS_SUPER_CHEST_CHANCE) / (1 + SOUVENIR_WEIGHT_MULTIPLIER) + PREVIOUS_SUPER_CHEST_CHANCE / 3;
+export const SPORTS_REWARD_CHANCE = (1 - SPORTS_BALANCE_REFERENCE_CHEST_CHANCE) / (1 + SOUVENIR_WEIGHT_MULTIPLIER) + SPORTS_BALANCE_REFERENCE_CHEST_CHANCE / 3;
 export const MINI_PRIZE_CHANCE = 1 - SPORTS_REWARD_CHANCE - SUPER_CHEST_CHANCE / 3;
 const NON_CHEST_SPORTS_CHANCE = (SPORTS_REWARD_CHANCE - SUPER_CHEST_CHANCE / 3) / (1 - SUPER_CHEST_CHANCE);
 const CATEGORY_DRAW_SCALE = 1_000_000;
@@ -51,7 +52,7 @@ export function drawCaseOutcome(items, drawRandom = randomInt) {
   const superPrizes = items.filter(item => item.superPrize);
   if (!ordinary.length && !superPrizes.length) return null;
   const chestEligible = Boolean(superPrizes.length && ordinary.length);
-  const chestRound = chestEligible && drawRandom(1000) < SUPER_CHEST_CHANCE * 1000;
+  const chestRound = chestEligible && drawRandom(CATEGORY_DRAW_SCALE) < Math.round(SUPER_CHEST_CHANCE * CATEGORY_DRAW_SCALE);
   if (chestRound) return { phase: 'chests', prize: drawCasePrize(superPrizes, drawRandom) };
   const sportsChance = chestEligible ? NON_CHEST_SPORTS_CHANCE : 1 / (1 + SOUVENIR_WEIGHT_MULTIPLIER);
   const sportsReward = ordinary.length && drawRandom(CATEGORY_DRAW_SCALE) < Math.round(sportsChance * CATEGORY_DRAW_SCALE);
