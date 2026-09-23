@@ -30,10 +30,10 @@ function changed(before) {
 
 test('ordinary payment, cross-sale and a run save without admin access', () => {
   for (const mutate of [
-    next => { next.players[0].actionCounts['payment-low'] = 1; next.players[0].bank = 1; },
-    next => { next.players[0].actionCounts['payment-mid'] = 1; next.players[0].bank = 2; },
-    next => { next.players[0].actionCounts['payment-high'] = 1; next.players[0].bank = 3; },
-    next => { next.players[0].cross = 1; next.players[0].bank = 2; }
+    next => { next.players[0].actionCounts['payment-low'] = 1; next.players[0].bank = 2; },
+    next => { next.players[0].actionCounts['payment-mid'] = 1; next.players[0].bank = 3; },
+    next => { next.players[0].actionCounts['payment-high'] = 1; next.players[0].bank = 4; },
+    next => { next.players[0].cross = 1; next.players[0].bank = 3; }
   ]) {
     const before = fixture();
     const after = changed(before);
@@ -48,12 +48,12 @@ test('ordinary payment, cross-sale and a run save without admin access', () => {
   assert.equal(publicUpdateValid(before, after), true);
 });
 
-test('a current activity day earns three steps before server credit consumption', () => {
+test('a current activity day earns five steps before server credit consumption', () => {
   const before = fixture();
   const after = changed(before);
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Moscow' });
   after.players[0].actionCounts['activity-' + today] = 70;
-  after.players[0].bank = 3;
+  after.players[0].bank = 5;
   assert.equal(publicUpdateValid(before, after), true);
 });
 
@@ -101,7 +101,7 @@ test('ordinary users can add a clean participant and change their own avatar', (
 test('a forged rollback snapshot cannot plant future coins', () => {
   const before = fixture(), after = changed(before);
   after.players[0].actionCounts['payment-low'] = 1;
-  after.players[0].bank = 1;
+  after.players[0].bank = 2;
   after.logs[0].reverse.ops[0].value[0].bank = 100;
   assert.equal(publicUpdateValid(before, after), false);
   after.logs[0].reverse = { kind: 'snapshot', state: before };
@@ -112,16 +112,16 @@ test('several real actions can be saved together, but repeated or log-only actio
   const before = fixture();
   const first = changed(before);
   first.players[0].actionCounts['payment-low'] = 1;
-  first.players[0].bank = 1;
+  first.players[0].bank = 2;
   const second = changed(first);
   second.logs[0].id = 'log-2';
   second.players[0].cross = 1;
-  second.players[0].bank = 3;
+  second.players[0].bank = 5;
   assert.equal(publicUpdateValid(before, second), true);
 
   const repeated = changed(before);
   repeated.players[0].actionCounts['payment-low'] = 1000;
-  repeated.players[0].bank = 1000;
+  repeated.players[0].bank = 2000;
   assert.equal(publicUpdateValid(before, repeated), false);
 
   assert.equal(publicUpdateValid(before, changed(before)), false);

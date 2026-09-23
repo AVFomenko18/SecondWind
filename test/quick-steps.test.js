@@ -39,9 +39,9 @@ test('quick action requires a second click before steps are credited', () => {
   assert.equal(player.bank, 0);
   assert.equal(confirmButton.hidden, false);
   assert.equal(confirmFields.label.textContent, 'Оплата от 50 000 до 99 999 ₽');
-  assert.match(confirmFields.gain.textContent, /\+2 шаг/);
+  assert.match(confirmFields.gain.textContent, /\+3 шаг/);
   context.confirmQuickStep();
-  assert.equal(player.bank, 2);
+  assert.equal(player.bank, 3);
   assert.equal(player.actionCounts['payment-mid'], 1);
   assert.equal(confirmButton.hidden, true);
 });
@@ -51,12 +51,12 @@ test('quick buttons credit calibrated steps without inventing cash amounts or di
   context.creditQuickStep('cashLow');
   context.creditQuickStep('cashMid');
   context.creditQuickStep('cashHigh');
-  assert.equal(player.bank, 6);
+  assert.equal(player.bank, 9);
   assert.equal(player.cash, 0);
   assert.equal(player.actionCounts['payment-low'], 1);
   assert.equal(player.actionCounts['payment-mid'], 1);
   assert.equal(player.actionCounts['payment-high'], 1);
-  assert.deepEqual(animations.map(item => item.amount), [1, 2, 3]);
+  assert.deepEqual(animations.map(item => item.amount), [2, 3, 4]);
 });
 
 test('one activity credit unlocks one confirmed activity action', () => {
@@ -68,7 +68,7 @@ test('one activity credit unlocks one confirmed activity action', () => {
   context.confirmQuickStep();
   context.creditQuickStep('cross');
   context.creditQuickStep('powerCalls');
-  assert.equal(player.bank, 5);
+  assert.equal(player.bank, 8);
   assert.equal(player.actionCounts['activity-2026-09-18'], 70);
   assert.equal(context.salesCredits.p1.activity, 0);
   assert.equal(player.cross, 1);
@@ -89,8 +89,10 @@ test('game field shows payment, activity and cross-sale buttons without power ca
   assert.match(view, /💳/);
   assert.match(view, /⚡/);
   assert.match(view, /🤝/);
-  assert.match(view, /1 шаг/);
+  assert.match(view, /2 шага/);
   assert.equal((view.match(/3 шага/g) || []).length, 2);
+  assert.match(view, /4 шага/);
+  assert.match(view, /5 шагов/);
   assert.match(view, /Активность пока недоступна/);
   assert.doesNotMatch(view, /👟|Всего оплат|учтено дней|Всего кросс-сейлов|Дополнительные действия/);
   assert.doesNotMatch(view, /type="number"/);
