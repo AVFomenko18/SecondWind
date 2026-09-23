@@ -88,11 +88,14 @@ test('ordinary users can add a clean participant and change their own avatar', (
   const before = fixture();
   const addition = changed(before);
   addition.players.push({
-    id: 'p2', name: 'Саша', color: '#cf744d', sport: 1,
+    id: 'p2', name: 'Саша', salesName: 'Саша', color: '#cf744d', sport: 1,
     pos: 0, high: 0, bank: 0, cash: 0, cashBase: 0, calls: 0,
     cross: 0, shields: 0, used: [], actionCounts: {}
   });
   assert.equal(publicUpdateValid(before, addition), true);
+  const mismatchedTelegramName = structuredClone(addition);
+  mismatchedTelegramName.players[1].salesName = 'Другой человек';
+  assert.equal(publicUpdateValid(before, mismatchedTelegramName), false);
   const avatar = changed(before);
   avatar.players[0].avatar = 'data:image/png;base64,AAAA';
   assert.equal(publicUpdateValid(before, avatar), true);

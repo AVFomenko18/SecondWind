@@ -96,7 +96,7 @@ export function publicUpdateValid(before, after, verifyHistory = true) {
   let changed = false;
   for (let i = 0; i < after.players.length; i++) {
     const player = after.players[i], old = before.players[i] || {
-      id: player?.id, name: player?.name, color: player?.color, sport: player?.sport,
+      id: player?.id, name: player?.name, salesName: player?.salesName, color: player?.color, sport: player?.sport,
       pos: 0, high: 0, bank: 0, cash: 0, cashBase: 0, calls: 0, cross: 0,
       shields: 0, used: [], actionCounts: {}
     };
@@ -105,7 +105,7 @@ export function publicUpdateValid(before, after, verifyHistory = true) {
         !COLORS.has(player.color)) return false;
     seen.add(player.id);
     if (i >= before.players.length) {
-      if (!integer(player.sport, 0, 9) ||
+      if (!integer(player.sport, 0, 9) || player.salesName !== player.name ||
           [...seen].slice(0, -1).some(id => after.players.find(item => item.id === id)?.name.toLowerCase() === player.name.toLowerCase())) return false;
       changed = true;
     } else if (player.id !== old.id || player.name !== old.name || player.color !== old.color) return false;
