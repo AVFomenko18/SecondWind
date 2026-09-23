@@ -290,12 +290,28 @@ function inventoryChanges(before, after, ids) {
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
+  ssl: { rejectUnauthorized: false },
+  max: 3,
+  idleTimeoutMillis: 10000,
+  connectionTimeoutMillis: 10000,
+  allowExitOnIdle: true
 });
-const REWARD_FEED_CACHE_MS = 15000;
 let rewardFeedCache = null;
-let rewardFeedCacheExpiresAt = 0;
 let rewardFeedRefresh = null;
+const actionCreditsCache = new Map();
+let departmentCache = null;
+let departmentRefresh = null;
+let prizeDataCache = null;
+let prizeDataRefresh = null;
+let readCacheRevision = 0;
+
+function invalidateReadCaches(teamId, rewards = false) {
+  readCacheRevision++;
+  if (teamId !== undefined) actionCreditsCache.delete(teamId);
+  departmentCache = null;
+  if (rewards) rewardFeedCache = null;
+  prizeDataCache = null;
+}
 
 // The original single-team game uses id 1, so its saved progress stays with Fomenko.
 const teamIds = Object.freeze({ fomenko: 1, lvovsky: 2, shabanov: 3, kozhanov: 4, otrakusha: 5, kulikov: 6, kondratyev: 7, chekhova: 8, klimentovich: 9, bagaturiya: 10, tolstov: 11 });
@@ -677,6 +693,11 @@ function ensureTable() {
         )
       `);
       await pool.query(`
+        CREATE INDEX IF NOT EXISTS telegram_action_credits_pending_team_idx
+        ON telegram_action_credits (team_id, player_id, action_kind)
+        WHERE status = 'pending'
+      `);
+      await pool.query(`
         DO $$ BEGIN
           IF EXISTS (
             SELECT 1 FROM pg_constraint
@@ -830,8 +851,9 @@ app.get('/api/game-state', async (req, res) => {
   }
 });
 
-app.get('/api/prize-stock', async (_req, res) => {
-  try {
+async function prizeData() {
+  if (!prizeDataCache) {
+    prizeDataRefresh ||= (async () => {
     await ensureTable();
     const [result, catalog] = await Promise.all([
       pool.query('SELECT prize_id, purchased, limit_count FROM super_prize_inventory'),
@@ -842,7 +864,23 @@ app.get('/api/prize-stock', async (_req, res) => {
     const limits = Object.fromEntries(shop.filter(item => item.superPrize).map(item => [item.id, item.stockLimit]));
     const remaining = Object.fromEntries(Object.entries(limits)
       .map(([id, limit]) => [id, Math.max(0, limit - (purchased[id] || 0))]));
-    res.json({ remaining, limits, shop });
+      const items = casePool(shop, result.rows);
+      prizeDataCache = {
+        stock: { remaining, limits, shop },
+        catalog: { cost: CASE_COST, superChestChance: SUPER_CHEST_CHANCE * 100, miniPrizes: MINI_PRIZES,
+          items: items.map(({ id, name, cost, superPrize, remaining: itemRemaining }) =>
+            ({ id, name, cost, superPrize, remaining: itemRemaining })) }
+      };
+      return prizeDataCache;
+    })().finally(() => { prizeDataRefresh = null; });
+    await prizeDataRefresh;
+  }
+  return prizeDataCache;
+}
+
+app.get('/api/prize-stock', async (_req, res) => {
+  try {
+    res.json((await prizeData()).stock);
   } catch (error) {
     databaseError(res, error);
   }
@@ -873,6 +911,10 @@ app.post('/api/telegram/webhook', async (req, res) => {
       ON CONFLICT (chat_id, message_id) DO NOTHING
     `, [String(message.chat.id), message.message_id, String(message.from.id), parsed.managerName, parsed.normalizedName,
       parsed.kind, parsed.amount, match?.teamId ?? null, match?.playerId ?? null, match ? 'pending' : 'unmatched', rawText]);
+    if (match) {
+      readCacheRevision++;
+      actionCreditsCache.delete(match.teamId);
+    }
     res.json({ ok: true, recognized: true, matched: Boolean(match) });
   } catch (error) {
     databaseError(res, error);
@@ -883,20 +925,34 @@ app.get('/api/action-credits', async (req, res) => {
   const id = teamId(req, res);
   if (id === null) return;
   try {
-    await ensureTable();
-    const result = await pool.query(`
-      SELECT player_id, action_kind, COUNT(*)::integer AS count
-      FROM telegram_action_credits
-      WHERE team_id = $1 AND status = 'pending'
-      GROUP BY player_id, action_kind
-    `, [id]);
-    const credits = {};
-    for (const row of result.rows) {
-      credits[row.player_id] ??= {};
-      credits[row.player_id][row.action_kind] = Number(row.count);
+    let cached = actionCreditsCache.get(id);
+    if (!cached) {
+      const revision = readCacheRevision;
+      cached = (async () => {
+        await ensureTable();
+        const result = await pool.query(`
+          SELECT player_id, action_kind, COUNT(*)::integer AS count
+          FROM telegram_action_credits
+          WHERE team_id = $1 AND status = 'pending'
+          GROUP BY player_id, action_kind
+        `, [id]);
+        const credits = {};
+        for (const row of result.rows) {
+          credits[row.player_id] ??= {};
+          credits[row.player_id][row.action_kind] = Number(row.count);
+        }
+        const payload = { configured: telegramConfigured(), credits };
+        if (revision === readCacheRevision) actionCreditsCache.set(id, payload);
+        return payload;
+      })().catch(error => {
+        actionCreditsCache.delete(id);
+        throw error;
+      });
+      actionCreditsCache.set(id, cached);
     }
+    const payload = await cached;
     res.setHeader('Cache-Control', 'no-store');
-    res.json({ configured: telegramConfigured(), credits });
+    res.json(payload);
   } catch (error) {
     databaseError(res, error);
   }
@@ -985,6 +1041,7 @@ app.post('/api/admin/player-adjustments', async (req, res) => {
       GROUP BY player_id
     `, [id]);
     await client.query('COMMIT');
+    invalidateReadCaches(id);
     const next = withDepartmentConfig(raw, catalogResult.rows[0].data, rulesResult.rows[0].data);
     res.setHeader('ETag', stateETag(next));
     res.setHeader('Cache-Control', 'no-store');
@@ -1013,16 +1070,8 @@ app.get('/api/department-rules', async (_req, res) => {
 
 app.get('/api/case-catalog', async (_req, res) => {
   try {
-    await ensureTable();
-    const [catalog, inventory] = await Promise.all([
-      pool.query('SELECT data FROM department_shop WHERE id = 1'),
-      pool.query('SELECT prize_id, purchased, limit_count FROM super_prize_inventory')
-    ]);
-    const items = casePool(catalog.rows[0].data, inventory.rows);
     res.setHeader('Cache-Control', 'no-store');
-    res.json({ cost: CASE_COST, superChestChance: SUPER_CHEST_CHANCE * 100, miniPrizes: MINI_PRIZES,
-      items: items.map(({ id, name, cost, superPrize, remaining }) =>
-        ({ id, name, cost, superPrize, remaining })) });
+    res.json((await prizeData()).catalog);
   } catch (error) {
     databaseError(res, error);
   }
@@ -1120,6 +1169,7 @@ app.post('/api/open-case', async (req, res) => {
     next.undo = null;
     await client.query('UPDATE game_state SET data = $2::jsonb, updated_at = now() WHERE id = $1', [id, JSON.stringify(next)]);
     await client.query('COMMIT');
+    invalidateReadCaches(id, true);
     res.setHeader('ETag', stateETag(next));
     res.json(outcome.phase === 'chests'
       ? { state: next, phase: 'chests', roundId: requestId }
@@ -1205,6 +1255,7 @@ app.post('/api/choose-chest', async (req, res) => {
     await client.query('UPDATE game_state SET data = $2::jsonb, updated_at = now() WHERE id = $1', [id, JSON.stringify(next)]);
     await client.query('UPDATE case_rounds SET resolved = $3::jsonb WHERE team_id = $1 AND request_id = $2', [id, requestId, JSON.stringify(resolution)]);
     await client.query('COMMIT');
+    invalidateReadCaches(id, true);
     res.setHeader('ETag', stateETag(next));
     res.json({ state: next, ...resolution });
   } catch (error) {
@@ -1218,8 +1269,7 @@ app.post('/api/choose-chest', async (req, res) => {
 // Recent reward purchases across the whole department, for the public game feed.
 app.get('/api/reward-feed', async (req, res) => {
   try {
-    if (req.query.fresh === '1') rewardFeedCacheExpiresAt = 0;
-    if (!rewardFeedCache || Date.now() >= rewardFeedCacheExpiresAt) {
+    if (!rewardFeedCache) {
       rewardFeedRefresh ||= (async () => {
         await ensureTable();
         const result = await pool.query('SELECT id, data FROM game_state WHERE id = ANY($1::int[])', [Object.values(teamIds)]);
@@ -1243,7 +1293,6 @@ app.get('/api/reward-feed', async (req, res) => {
         }).filter(entry => typeof entry.title === 'string' && Number.isSafeInteger(entry.cost) && Number.isFinite(Date.parse(entry.at)))
           .sort((a, b) => Date.parse(b.at) - Date.parse(a.at)).slice(0, 150);
         rewardFeedCache = { entries };
-        rewardFeedCacheExpiresAt = Date.now() + REWARD_FEED_CACHE_MS;
         return rewardFeedCache;
       })().finally(() => { rewardFeedRefresh = null; });
       await rewardFeedRefresh;
@@ -1478,6 +1527,7 @@ app.post('/api/game-state', async (req, res) => {
       [id, JSON.stringify(req.body)]
     );
     await client.query('COMMIT');
+    invalidateReadCaches(id, true);
     res.setHeader('ETag', stateETag(req.body));
     res.json({ ok: true });
   } catch (err) {
@@ -1519,10 +1569,12 @@ function stepsFromHistory(player, logs) {
 
 app.get('/api/department', async (req, res) => {
   try {
-    await ensureTable();
-    const result = await pool.query('SELECT id, data, updated_at FROM game_state WHERE id = ANY($1::int[])', [Object.values(teamIds)]);
-    const byId = new Map(result.rows.map(row => [Number(row.id), row]));
-    const teams = Object.entries(teamIds).map(([key, id]) => {
+    if (!departmentCache) {
+      departmentRefresh ||= (async () => {
+        await ensureTable();
+        const result = await pool.query('SELECT id, data, updated_at FROM game_state WHERE id = ANY($1::int[])', [Object.values(teamIds)]);
+        const byId = new Map(result.rows.map(row => [Number(row.id), row]));
+        const teams = Object.entries(teamIds).map(([key, id]) => {
       const row = byId.get(id);
       const game = row?.data || {};
       const ledger = Array.isArray(game.ledger) ? game.ledger : [];
@@ -1542,8 +1594,13 @@ app.get('/api/department', async (req, res) => {
         return sum;
       }, { steps: 0, payments: 0, laps: 0, calls: 0, activityDays: 0, crossSales: 0, coins: 0 });
       return { key, name: teamNames[key], players, totals, saved: Boolean(row), updatedAt: game.updated ?? row?.updated_at ?? null };
-    });
-    const payload = { teams };
+        });
+        departmentCache = { teams };
+        return departmentCache;
+      })().finally(() => { departmentRefresh = null; });
+      await departmentRefresh;
+    }
+    const payload = departmentCache;
     const etag = stateETag(payload);
     res.setHeader('ETag', etag);
     if (req.get('if-none-match') === etag) return res.status(304).end();

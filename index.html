@@ -200,7 +200,7 @@ historyTeam=TEAM_KEY;
 function renderTeamTabs(){document.querySelectorAll('.team-tab').forEach(link=>{const active=link.dataset.team===TEAM_KEY;link.classList.toggle('active',active);if(active)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current')});document.title='Спортивная драма · '+TEAM_NAMES[TEAM_KEY]}
 async function switchTeam(event,key){event.preventDefault();if(key===TEAM_KEY)return false;if(!TEAM_KEYS.includes(key))return false;if(saveTask&&await saveTask===false)return false;if(pendingSave&&await flushProgress()===false)return false;if(settingsOpen&&await closeSettings()===false)return false;const url=new URL(location.href);url.searchParams.set('team',key);location.assign(url.href);return false}
 let rewardFeedSignature='',rewardFeedLoading=false,rewardFeedETag='';
-const ACTION_CREDITS_REFRESH_MS=15000,REWARD_FEED_REFRESH_MS=60000,PRIZE_DATA_REFRESH_MS=60000,UI_IDLE_TIMEOUT_MS=5*60*1000;
+const ACTION_CREDITS_REFRESH_MS=30000,REWARD_FEED_REFRESH_MS=60000,PRIZE_DATA_REFRESH_MS=60000,UI_IDLE_TIMEOUT_MS=5*60*1000;
 let lastUiActivityAt=Date.now();
 function backgroundRefreshAllowed(){return document.visibilityState==='visible'&&Date.now()-lastUiActivityAt<UI_IDLE_TIMEOUT_MS}
 function refreshVisibleView(){if(!backgroundRefreshAllowed())return;if(tab==='board'){void loadActionCredits();void loadRewardFeed()}else if(tab==='prizes'){void loadPrizeStock();void loadCaseCatalog()}}

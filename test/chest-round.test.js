@@ -53,6 +53,7 @@ function setup({ forceNext = false } = {}) {
         { type: 'ordinary', prize: { id: 'ordinary-1', name: 'Обед 1,5 часа' } }
       ] }),
     randomUUID: () => 'log-id', CASE_COST: 2, FORCE_NEXT_GUARANTEED_SUPER_CHEST_CONTROL: 'force-next', structuredClone,
+    invalidateReadCaches: () => {},
     databaseError: (_res, error) => { throw error; }
   };
   vm.createContext(context);
