@@ -49,12 +49,11 @@ test('a chest round has one super prize, one souvenir and one ordinary prize', (
   assert.equal(round.chests.find(item => item.type === 'ordinary').prize.id, 'standard');
 });
 
-test('a guaranteed chest round awards the reserved super prize from every chest', () => {
+test('a guaranteed chest round still looks like a normal three-category round', () => {
   const ordinary = casePool(shop, [{ prize_id: 'rare', purchased: 0, limit_count: 5 }]).filter(item => !item.superPrize);
   const round = createChestRound({ id: 'rare', name: 'Выходной' }, ordinary, () => 0, true);
   assert.equal(round.guaranteedSuper, true);
-  assert.deepEqual(round.chests.map(item => item.type), ['super', 'super', 'super']);
-  assert.deepEqual(round.chests.map(item => item.prize.id), ['rare', 'rare', 'rare']);
+  assert.deepEqual(round.chests.map(item => item.type).sort(), ['ordinary', 'souvenir', 'super']);
 });
 
 test('three souvenir sectors award a random souvenir without changing super chest odds', () => {

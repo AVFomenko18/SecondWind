@@ -1172,7 +1172,12 @@ app.post('/api/choose-chest', async (req, res) => {
     const legacyChest = index => index === round.position
       ? { type: 'super', prize: round.prize }
       : { type: 'souvenir', prize: round.miniPrizes[index < round.position ? index : index - 1] };
-    const chestResult = Array.isArray(round.chests) ? round.chests[chest] : legacyChest(chest);
+    const chests = Array.isArray(round.chests) ? structuredClone(round.chests) : [0, 1, 2].map(legacyChest);
+    if (round.guaranteedSuper === true && chests[chest]?.type !== 'super') {
+      const superIndex = chests.findIndex(item => item.type === 'super');
+      [chests[chest], chests[superIndex]] = [chests[superIndex], chests[chest]];
+    }
+    const chestResult = chests[chest];
     const superPrize = chestResult.type === 'super';
     if (!superPrize) {
       await client.query('UPDATE super_prize_inventory SET purchased = GREATEST(0, purchased - 1) WHERE prize_id = $1', [round.prize.id]);
@@ -1182,7 +1187,7 @@ app.post('/api/choose-chest', async (req, res) => {
     const reward = { id: requestId, playerId: saved.player_id, prizeId: prize.id, title: prize.name, cost: CASE_COST,
       source: 'shop', superPrize, miniPrize: souvenir, souvenir, case: true, claimed: false, cancelled: false, at: before.pendingCase.at };
     const reveal = [0, 1, 2].map(index => {
-      const result = Array.isArray(round.chests) ? round.chests[index] : legacyChest(index);
+      const result = chests[index];
       return { title: result.prize.name, type: result.type, superPrize: result.type === 'super' };
     });
     const next = structuredClone(before);

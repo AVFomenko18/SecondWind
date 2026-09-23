@@ -63,10 +63,6 @@ export function drawCaseOutcome(items, drawRandom = randomInt) {
 export function createChestRound(prize, ordinaryPrizes, drawRandom = randomInt, guaranteedSuper = false) {
   if (!ordinaryPrizes.length) throw new Error('A chest round requires an ordinary prize');
   const superPrize = { id: prize.id, name: prize.name };
-  if (guaranteedSuper) return {
-    position: 0, prize: superPrize, guaranteedSuper: true,
-    chests: [0, 1, 2].map(() => ({ type: 'super', prize: { ...superPrize } }))
-  };
   const position = drawRandom(3);
   const openPositions = [0, 1, 2].filter(index => index !== position);
   const souvenirPosition = openPositions.splice(drawRandom(2), 1)[0];
@@ -77,5 +73,5 @@ export function createChestRound(prize, ordinaryPrizes, drawRandom = randomInt, 
   chests[position] = { type: 'super', prize: superPrize };
   chests[souvenirPosition] = { type: 'souvenir', prize: souvenir };
   chests[ordinaryPosition] = { type: 'ordinary', prize: { id: ordinary.id, name: ordinary.name } };
-  return { position, prize: superPrize, chests };
+  return { position, prize: superPrize, chests, ...(guaranteedSuper ? { guaranteedSuper: true } : {}) };
 }

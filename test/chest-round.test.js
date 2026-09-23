@@ -47,9 +47,7 @@ function setup({ forceNext = false } = {}) {
     ],
     drawCasePrize: items => items[0],
     drawCaseOutcome: () => ({ phase: 'chests', prize: { id: 'super', name: 'Day off', superPrize: true } }),
-    createChestRound: (_prize, _ordinary, _random, guaranteed) => ({ position: guaranteed ? 0 : 1, prize: { id: 'super', name: 'Day off' }, chests: guaranteed
-      ? [0, 1, 2].map(() => ({ type: 'super', prize: { id: 'super', name: 'Day off' } }))
-      : [
+    createChestRound: (_prize, _ordinary, _random, guaranteed) => ({ position: 1, prize: { id: 'super', name: 'Day off' }, ...(guaranteed ? { guaranteedSuper: true } : {}), chests: [
         { type: 'souvenir', prize: { id: 'mini-1', name: 'Зелье дозвона' } },
         { type: 'super', prize: { id: 'super', name: 'Day off' } },
         { type: 'ordinary', prize: { id: 'ordinary-1', name: 'Обед 1,5 часа' } }
@@ -126,16 +124,18 @@ test('correct chest awards the reserved super prize', async () => {
   assert.equal(database.stock.purchased, 1);
 });
 
-test('one-time forced opening puts the super prize in every chest', async () => {
+test('one-time forced opening looks ordinary but awards the selected super prize', async () => {
   const { handlers, database, requestId, request, response } = setup({ forceNext: true });
   const opening = response();
   await handlers['/api/open-case'](request({ playerId: 'player-1', requestId }), opening);
   assert.equal(opening.data.phase, 'chests');
   assert.equal(database.forceNext, false);
-  assert.deepEqual(database.round.data.chests.map(item => item.type), ['super', 'super', 'super']);
+  assert.equal(database.round.data.guaranteedSuper, true);
+  assert.deepEqual(database.round.data.chests.map(item => item.type), ['souvenir', 'super', 'ordinary']);
   const choice = response();
   await handlers['/api/choose-chest'](request({ requestId, chest: 2 }), choice);
   assert.equal(choice.data.reward.superPrize, true);
   assert.equal(choice.data.reward.title, 'Day off');
+  assert.deepEqual(Array.from(choice.data.reveal, item => item.type), ['souvenir', 'ordinary', 'super']);
   assert.equal(database.stock.purchased, 1);
 });
