@@ -43,3 +43,10 @@ test('activity buttons use server credits and server consumes them', () => {
   assert.match(server, /salesAction\.kind === 'activity' \|\| telegramConfigured\(\)/);
   assert.match(server, /Для этого дня нет подтверждённой активности 70%\+/);
 });
+
+test('activity credits accumulate until every confirmed day is claimed', () => {
+  assert.match(html, /function nextActivityKey\(p\)/);
+  assert.match(html, /5 шагов\$\{credit\('activity'\)\}/);
+  assert.doesNotMatch(html, /activityDone\|\|!activityAllowed/);
+  assert.match(server, /activity-\\d\{4\}-\\d\{2\}-\\d\{2\}\(\?:-\\d\+\)\?/);
+});

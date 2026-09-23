@@ -75,6 +75,22 @@ test('one activity credit unlocks one confirmed activity action', () => {
   assert.equal(player.calls, 0);
 });
 
+test('unused activity credits accumulate and can be claimed later', () => {
+  const { context, player } = setup();
+  context.salesCredits = { p1: { activity: 2 } };
+  context.salesCreditCount = (current, kind) => context.salesCredits[current.id]?.[kind] || 0;
+  context.salesActionLocked = (current, kind) => kind === 'activity' && context.salesCreditCount(current, kind) < 1;
+  context.requestQuickStep('activity');
+  context.confirmQuickStep();
+  context.requestQuickStep('activity');
+  context.confirmQuickStep();
+  assert.equal(player.bank, 10);
+  assert.equal(player.actionCounts['activity-2026-09-18'], 70);
+  assert.equal(player.actionCounts['activity-2026-09-18-2'], 70);
+  assert.equal(context.activityDays(player), 2);
+  assert.equal(context.salesCredits.p1.activity, 0);
+});
+
 test('game field shows payment, activity and cross-sale buttons without power calls', () => {
   const from = html.indexOf('function quickActionsView(){');
   const to = html.indexOf('function fieldControls(){', from);

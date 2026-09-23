@@ -604,7 +604,7 @@ function salesActionDeltas(before, after) {
     const old = before?.players?.find(item => item.id === player.id);
     if (!old) continue;
     for (const [kind, key] of keys) for (let count = 0; count < (player.actionCounts?.[key] || 0) - (old.actionCounts?.[key] || 0); count++) changes.push({ kind, playerId: player.id });
-    for (const key of Object.keys(player.actionCounts || {})) if (/^activity-\d{4}-\d{2}-\d{2}$/.test(key) && !Object.hasOwn(old.actionCounts || {}, key)) changes.push({ kind: 'activity', playerId: player.id });
+    for (const key of Object.keys(player.actionCounts || {})) if (/^activity-\d{4}-\d{2}-\d{2}(?:-\d+)?$/.test(key) && !Object.hasOwn(old.actionCounts || {}, key)) changes.push({ kind: 'activity', playerId: player.id });
     for (let count = 0; count < player.cross - old.cross; count++) changes.push({ kind: 'cross', playerId: player.id });
   }
   return changes;
@@ -1529,7 +1529,7 @@ app.get('/api/department', async (req, res) => {
         payments: paymentCount(player, game.logs),
         laps: Math.floor(nonnegativeNumber(player.high) / 60),
         calls: nonnegativeNumber(player.calls),
-        activityDays: Object.keys(player.actionCounts || {}).filter(key => /^activity-\d{4}-\d{2}-\d{2}$/.test(key)).length,
+        activityDays: Object.keys(player.actionCounts || {}).filter(key => /^activity-\d{4}-\d{2}-\d{2}(?:-\d+)?$/.test(key)).length,
         crossSales: nonnegativeNumber(player.cross),
         coins: ledger.reduce((sum, item) => sum + (item?.playerId === player.id && ['milestone', 'challenge', 'manual'].includes(item?.source) ? nonnegativeNumber(item.amount) : 0), 0)
       }));

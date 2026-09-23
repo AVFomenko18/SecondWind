@@ -12,7 +12,7 @@ function without(object, keys) {
   return Object.fromEntries(Object.entries(object || {}).filter(([key]) => !keys.includes(key)));
 }
 function activityDayAllowed(key) {
-  const match = /^activity-(\d{4}-\d{2}-\d{2})$/.exec(key);
+  const match = /^activity-(\d{4}-\d{2}-\d{2})(?:-\d+)?$/.exec(key);
   if (!match) return false;
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Moscow' });
   const difference = (Date.parse(today) - Date.parse(match[1])) / 86400000;
