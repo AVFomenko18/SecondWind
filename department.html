@@ -97,7 +97,13 @@ header .header-team-navigation .team-tabs{width:100%;flex:0 0 auto;justify-conte
     }
     document.getElementById('filters').addEventListener('click',event=>{const key=event.target.closest('button[data-metric]')?.dataset.metric;if(!METRICS.some(metric=>metric.key===key))return;selectedMetric=key;draw()});
     document.getElementById('refresh').addEventListener('click',refresh);
-    draw();refresh();setInterval(()=>{if(document.visibilityState==='visible')refresh()},60000);
+    const DEPARTMENT_REFRESH_MS=60000,UI_IDLE_TIMEOUT_MS=5*60*1000;let lastUiActivityAt=Date.now();
+    const backgroundRefreshAllowed=()=>document.visibilityState==='visible'&&Date.now()-lastUiActivityAt<UI_IDLE_TIMEOUT_MS;
+    function markUiActivity(){const wasIdle=Date.now()-lastUiActivityAt>=UI_IDLE_TIMEOUT_MS;lastUiActivityAt=Date.now();if(wasIdle)void refresh()}
+    for(const eventName of ['pointerdown','keydown','touchstart'])document.addEventListener(eventName,markUiActivity,{passive:true});
+    window.addEventListener('focus',()=>{markUiActivity();void refresh()});
+    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){markUiActivity();void refresh()}});
+    draw();refresh();setInterval(()=>{if(backgroundRefreshAllowed())void refresh()},DEPARTMENT_REFRESH_MS);
   </script>
 </body>
 </html>

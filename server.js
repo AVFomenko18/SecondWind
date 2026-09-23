@@ -274,6 +274,10 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
 });
+const REWARD_FEED_CACHE_MS = 15000;
+let rewardFeedCache = null;
+let rewardFeedCacheExpiresAt = 0;
+let rewardFeedRefresh = null;
 
 // The original single-team game uses id 1, so its saved progress stays with Fomenko.
 const teamIds = Object.freeze({ fomenko: 1, lvovsky: 2, shabanov: 3, kozhanov: 4, otrakusha: 5, kulikov: 6, kondratyev: 7, chekhova: 8, klimentovich: 9, bagaturiya: 10, tolstov: 11 });
@@ -1127,31 +1131,40 @@ app.post('/api/choose-chest', async (req, res) => {
 });
 
 // Recent reward purchases across the whole department, for the public game feed.
-app.get('/api/reward-feed', async (_req, res) => {
+app.get('/api/reward-feed', async (req, res) => {
   try {
-    await ensureTable();
-    const result = await pool.query('SELECT id, data FROM game_state WHERE id = ANY($1::int[])', [Object.values(teamIds)]);
-    const teamsById = Object.fromEntries(Object.entries(teamIds).map(([key, id]) => [id, teamNames[key]]));
-    const entries = result.rows.flatMap(({ id, data }) => {
-      const players = new Map((Array.isArray(data?.players) ? data.players : []).map(player => [player.id, player.name]));
-      return (Array.isArray(data?.rewards) ? data.rewards : [])
-        .filter(reward => reward?.source === 'shop' && !reward.cancelled && typeof reward.at === 'string')
-        .map(reward => ({
-          id: `${id}:${reward.id}`,
-          team: teamsById[id],
-          player: players.get(reward.playerId) || 'Участник',
-          title: reward.title,
-          cost: reward.cost,
-          case: reward.case === true,
-          superPrize: countedReward(reward),
-          miniPrize: reward.miniPrize === true,
-          souvenir: reward.souvenir === true,
-          at: reward.at
-        }));
-    }).filter(entry => typeof entry.title === 'string' && Number.isSafeInteger(entry.cost) && Number.isFinite(Date.parse(entry.at)))
-      .sort((a, b) => Date.parse(b.at) - Date.parse(a.at)).slice(0, 150);
-    res.setHeader('Cache-Control', 'no-store');
-    res.json({ entries });
+    if (req.query.fresh === '1') rewardFeedCacheExpiresAt = 0;
+    if (!rewardFeedCache || Date.now() >= rewardFeedCacheExpiresAt) {
+      rewardFeedRefresh ||= (async () => {
+        await ensureTable();
+        const result = await pool.query('SELECT id, data FROM game_state WHERE id = ANY($1::int[])', [Object.values(teamIds)]);
+        const teamsById = Object.fromEntries(Object.entries(teamIds).map(([key, id]) => [id, teamNames[key]]));
+        const entries = result.rows.flatMap(({ id, data }) => {
+          const players = new Map((Array.isArray(data?.players) ? data.players : []).map(player => [player.id, player.name]));
+          return (Array.isArray(data?.rewards) ? data.rewards : [])
+            .filter(reward => reward?.source === 'shop' && !reward.cancelled && typeof reward.at === 'string')
+            .map(reward => ({
+              id: `${id}:${reward.id}`,
+              team: teamsById[id],
+              player: players.get(reward.playerId) || 'Участник',
+              title: reward.title,
+              cost: reward.cost,
+              case: reward.case === true,
+              superPrize: countedReward(reward),
+              miniPrize: reward.miniPrize === true,
+              souvenir: reward.souvenir === true,
+              at: reward.at
+            }));
+        }).filter(entry => typeof entry.title === 'string' && Number.isSafeInteger(entry.cost) && Number.isFinite(Date.parse(entry.at)))
+          .sort((a, b) => Date.parse(b.at) - Date.parse(a.at)).slice(0, 150);
+        rewardFeedCache = { entries };
+        rewardFeedCacheExpiresAt = Date.now() + REWARD_FEED_CACHE_MS;
+        return rewardFeedCache;
+      })().finally(() => { rewardFeedRefresh = null; });
+      await rewardFeedRefresh;
+    }
+    res.setHeader('Cache-Control', 'private, max-age=5');
+    res.json(rewardFeedCache);
   } catch (error) {
     databaseError(res, error);
   }

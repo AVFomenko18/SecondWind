@@ -5,7 +5,7 @@ import vm from 'node:vm';
 
 test('reward feed uses neutral verbs without guessing gender from names', async () => {
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-  const start = html.indexOf('async function loadRewardFeed(){');
+  const start = html.indexOf('async function loadRewardFeed(fresh=false){');
   const end = html.indexOf('\nfunction renderHeroChallenges', start);
   assert.ok(start >= 0 && end > start);
   const list = { scrollTop: 0, innerHTML: '' };
