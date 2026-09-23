@@ -16,6 +16,7 @@ const ACTIVITY_CREDIT_GRANT_MIGRATION = '2026-09-22-grant-activity-70-percent-fo
 const ACTIVITY_CREDIT_GRANT_2026_09_22_MIGRATION = '2026-09-23-grant-activity-70-percent-for-2026-09-22-v1';
 const ZINKEVICH_PAYMENT_CREDIT_CORRECTION = '2026-09-22-move-zinkevich-high-payment-to-mid-v1';
 const MANAGER_NAME_SYNC_MIGRATION = '2026-09-22-correct-five-manager-names-and-resync-v2';
+const MISSING_SALES_NAMES_SYNC_MIGRATION = '2026-09-23-backfill-missing-sales-names-and-resync-v1';
 const SUPER_PRIZE_LIMITS_MIGRATION = '2026-09-22-update-super-prize-limits-v1';
 const CERTIFICATE_DEMO_STOCK_MIGRATION = '2026-09-22-reset-demo-certificate-stock-v1';
 const ACTIVITY_CREDIT_GRANTS = Object.freeze({
@@ -422,6 +423,46 @@ async function correctManagerNamesAndResyncCredits() {
   }
 }
 
+async function backfillMissingSalesNamesAndResyncCredits() {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const claimed = await client.query(
+      'INSERT INTO app_migrations (id) VALUES ($1) ON CONFLICT DO NOTHING RETURNING id',
+      [MISSING_SALES_NAMES_SYNC_MIGRATION]
+    );
+    if (!claimed.rows.length) {
+      await client.query('ROLLBACK');
+      return;
+    }
+    const games = await client.query('SELECT id, data FROM game_state WHERE id = ANY($1::int[]) FOR UPDATE', [Object.values(teamIds)]);
+    for (const row of games.rows) {
+      const game = row.data;
+      let changed = false;
+      for (const player of game?.players || []) {
+        if (typeof player.salesName === 'string' && player.salesName.trim()) continue;
+        player.salesName = player.name;
+        changed = true;
+        await client.query(`
+          UPDATE telegram_action_credits
+          SET team_id = $1, player_id = $2, status = 'pending'
+          WHERE status = 'unmatched'
+            AND action_kind IN ('cashLow','cashMid','cashHigh','cross')
+            AND normalized_name = $3
+            AND created_at >= (((now() AT TIME ZONE 'Europe/Moscow')::date - 1)::timestamp AT TIME ZONE 'Europe/Moscow')
+        `, [Number(row.id), player.id, normalizeSalesName(player.name)]);
+      }
+      if (changed) await client.query('UPDATE game_state SET data = $2::jsonb, updated_at = now() WHERE id = $1', [Number(row.id), JSON.stringify(game)]);
+    }
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 async function grantFomenkoActionCredits() {
   const client = await pool.connect();
   try {
@@ -683,6 +724,7 @@ function ensureTable() {
       await pool.query('UPDATE department_shop SET data = $1::jsonb WHERE id = 1', [JSON.stringify(catalog)]);
       await seedDepartmentRosters(catalog, currentRules);
       await correctManagerNamesAndResyncCredits();
+      await backfillMissingSalesNamesAndResyncCredits();
       await grantFomenkoActionCredits();
       await grantActivityCredits();
       await grantActivityCredits(ACTIVITY_CREDIT_GRANTS_2026_09_22, ACTIVITY_CREDIT_GRANT_2026_09_22_MIGRATION, '22.09.2026');
@@ -808,7 +850,7 @@ app.post('/api/telegram/webhook', async (req, res) => {
     const games = await pool.query('SELECT id, data FROM game_state WHERE id = ANY($1::int[])', [Object.values(teamIds)]);
     const matches = [];
     for (const row of games.rows) for (const player of Array.isArray(row.data?.players) ? row.data.players : []) {
-      if (player.salesName && normalizeSalesName(player.salesName) === parsed.normalizedName) matches.push({ teamId: Number(row.id), playerId: player.id });
+      if (normalizeSalesName(player.salesName || player.name) === parsed.normalizedName) matches.push({ teamId: Number(row.id), playerId: player.id });
     }
     const match = matches.length === 1 ? matches[0] : null;
     await pool.query(`

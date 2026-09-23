@@ -14,3 +14,10 @@ test('manager correction keeps player ids and retries only recent unmatched sale
   assert.match(server, /AT TIME ZONE 'Europe\/Moscow'/);
   assert.match(server, /::date - 1/);
 });
+
+test('missing Telegram names fall back to manager names and recent events are retried', () => {
+  assert.match(server, /backfill-missing-sales-names-and-resync-v1/);
+  assert.match(server, /player\.salesName = player\.name/);
+  assert.match(server, /normalizeSalesName\(player\.salesName \|\| player\.name\) === parsed\.normalizedName/);
+  assert.match(server, /backfillMissingSalesNamesAndResyncCredits\(\)/);
+});
