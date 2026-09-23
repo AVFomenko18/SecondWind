@@ -13,6 +13,7 @@ const app = express();
 const ACTION_CREDIT_RESET_MIGRATION = '2026-09-21-reset-pending-action-credits-v2';
 const FOMENKO_ACTION_CREDIT_GRANT_MIGRATION = '2026-09-22-grant-alexander-fomenko-action-credits-v1';
 const ACTIVITY_CREDIT_GRANT_MIGRATION = '2026-09-22-grant-activity-70-percent-for-2026-09-21-v1';
+const ACTIVITY_CREDIT_GRANT_2026_09_22_MIGRATION = '2026-09-23-grant-activity-70-percent-for-2026-09-22-v1';
 const ZINKEVICH_PAYMENT_CREDIT_CORRECTION = '2026-09-22-move-zinkevich-high-payment-to-mid-v1';
 const MANAGER_NAME_SYNC_MIGRATION = '2026-09-22-correct-five-manager-names-and-resync-v2';
 const SUPER_PRIZE_LIMITS_MIGRATION = '2026-09-22-update-super-prize-limits-v1';
@@ -29,6 +30,19 @@ const ACTIVITY_CREDIT_GRANTS = Object.freeze({
   tolstov: ['Прохорова Василиса', 'Гусев Кирилл', 'Романова Людмила', 'Квон Екатерина', 'Умнова Виктория'],
   bagaturiya: ['Белеева Мария', 'Степанов Петр', 'Лем Станислав', 'Михайлова Карина', 'Брудковски Александра', 'Золотарев Игорь'],
   klimentovich: ['Шум Карина', 'Яловегин Николай', 'Гончарова Ирина', 'Зинкевич Елизавета']
+});
+const ACTIVITY_CREDIT_GRANTS_2026_09_22 = Object.freeze({
+  fomenko: ['Попова Анастасия', 'Красовский Антон'],
+  shabanov: ['Константинова Екатерина', 'Левченко Владислав', 'Пименова Виктория', 'Тихомирова Алина', 'Сычева Татьяна'],
+  lvovsky: ['Кузнецова Екатерина', 'Шмаков Юрий', 'Зыбченко Анастасия', 'Сопилкина Наталья', 'Соловьева Светлана'],
+  kozhanov: ['Шеханова Лилия', 'Негреева Диана', 'Агаджанян Валерия'],
+  kulikov: ['Ильина Диана', 'Кухто Арина', 'Беспалов Евгений', 'Забродская Карина'],
+  kondratyev: ['Рассомакин Иван', 'Шапошникова Натали', 'Шевелева Ксения'],
+  otrakusha: ['Лобков Артур'],
+  chekhova: ['Крестьянникова Александра', 'Гурулёва Дарья', 'Шарапова Анастасия'],
+  tolstov: ['Романова Людмила', 'Квон Екатерина', 'Умнова Виктория', 'Трифонова Ольга'],
+  bagaturiya: ['Белеева Мария', 'Степанов Петр', 'Лем Станислав', 'Михайлова Карина', 'Брудковски Александра', 'Золотарев Игорь'],
+  klimentovich: ['Виноградов Виктор', 'Качегова Даяна', 'Яловегин Николай', 'Ильницкий Илларион', 'Гончарова Ирина', 'Журавлева Евгения']
 });
 const MANAGER_NAME_SYNCS = Object.freeze([
   { team: 'otrakusha', name: 'Пасхалиди Димитрий', aliases: ['Пасхалиди Дмитрий'] },
@@ -454,14 +468,14 @@ async function grantFomenkoActionCredits() {
   }
 }
 
-async function grantActivityCredits() {
+async function grantActivityCredits(grantSet = ACTIVITY_CREDIT_GRANTS, migrationId = ACTIVITY_CREDIT_GRANT_MIGRATION, activityDate = '21.09.2026') {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     const games = await client.query('SELECT id, data FROM game_state WHERE id = ANY($1::int[]) FOR UPDATE', [Object.values(teamIds)]);
     const gamesById = new Map(games.rows.map(row => [Number(row.id), row.data]));
     const grants = [];
-    for (const [teamKey, names] of Object.entries(ACTIVITY_CREDIT_GRANTS)) {
+    for (const [teamKey, names] of Object.entries(grantSet)) {
       const id = teamIds[teamKey];
       const players = gamesById.get(id)?.players || [];
       for (const name of names) {
@@ -472,7 +486,7 @@ async function grantActivityCredits() {
     }
     const claimed = await client.query(
       'INSERT INTO app_migrations (id) VALUES ($1) ON CONFLICT DO NOTHING RETURNING id',
-      [ACTIVITY_CREDIT_GRANT_MIGRATION]
+      [migrationId]
     );
     if (!claimed.rows.length) {
       await client.query('ROLLBACK');
@@ -483,9 +497,9 @@ async function grantActivityCredits() {
       INSERT INTO telegram_action_credits
         (chat_id, message_id, source_bot_id, manager_name, normalized_name, action_kind, amount, team_id, player_id, status, raw_text)
       VALUES ($1,$2,$3,$4,$5,'activity',70,$6,$7,'pending',$8)
-    `, [`manual:${ACTIVITY_CREDIT_GRANT_MIGRATION}`, messageId++, 'manual-dashboard', player.name,
+    `, [`manual:${migrationId}`, messageId++, 'manual-dashboard', player.name,
       normalizeSalesName(player.name), id, player.id,
-      'Активность 70%+ за 21.09.2026 подтверждена по дашборду Simba.']);
+      `Активность 70%+ за ${activityDate} подтверждена по дашборду Simba.`]);
     await client.query('COMMIT');
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
@@ -671,6 +685,7 @@ function ensureTable() {
       await correctManagerNamesAndResyncCredits();
       await grantFomenkoActionCredits();
       await grantActivityCredits();
+      await grantActivityCredits(ACTIVITY_CREDIT_GRANTS_2026_09_22, ACTIVITY_CREDIT_GRANT_2026_09_22_MIGRATION, '22.09.2026');
       await correctZinkevichPaymentCredit();
       for (const item of catalog.filter(item => item.superPrize)) {
         const id = item.id;

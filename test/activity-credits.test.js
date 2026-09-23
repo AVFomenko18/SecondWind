@@ -22,6 +22,21 @@ test('confirmed dashboard activity grants exactly 42 roster credits once', () =>
   assert.match(server, /'activity',70/);
 });
 
+test('22 September dashboard grants exactly 42 roster credits once', () => {
+  const source = server.match(/const ACTIVITY_CREDIT_GRANTS_2026_09_22 = Object\.freeze\((\{[\s\S]*?\})\);/)?.[1];
+  assert.ok(source);
+  const grants = vm.runInNewContext('(' + source + ')');
+  const names = Object.values(grants).flat();
+  assert.equal(names.length, 42);
+  assert.equal(new Set(names).size, 42);
+  for (const [team, teamNames] of Object.entries(grants)) {
+    assert.ok(TEAM_ROSTERS[team]);
+    for (const name of teamNames) assert.ok(TEAM_ROSTERS[team].includes(name), `${team}: ${name}`);
+  }
+  assert.match(server, /grant-activity-70-percent-for-2026-09-22-v1/);
+  assert.match(server, /'22\.09\.2026'/);
+});
+
 test('activity buttons use server credits and server consumes them', () => {
   assert.match(html, /activityAllowed=salesCreditCount\(p,'activity'\)>0/);
   assert.match(html, /if\(kind==='activity'\)return salesCreditCount\(player,kind\)<1/);

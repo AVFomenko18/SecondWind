@@ -6,7 +6,7 @@ const server = readFileSync(new URL('../server.js', import.meta.url), 'utf8');
 
 test('one-off Fomenko credit grant cannot take down startup after the manager is removed', () => {
   const start = server.indexOf('async function grantFomenkoActionCredits()');
-  const end = server.indexOf('async function grantActivityCredits()', start);
+  const end = server.indexOf('async function grantActivityCredits(', start);
   const migration = server.slice(start, end);
 
   assert.ok(start >= 0 && end > start);
