@@ -2,7 +2,7 @@ import express from 'express';
 import pg from 'pg';
 import { createHmac, createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
-import { CASE_COST, MINI_PRIZES, SUPER_CHEST_CHANCE, casePool, drawCaseOutcome, createChestRound } from './case.js';
+import { CASE_COST, MINI_PRIZES, SUPER_CHEST_CHANCE, casePool, drawCasePrize, drawCaseOutcome, createChestRound } from './case.js';
 import { publicUpdateValid } from './game-integrity.js';
 import { dailyChallengeAdditionsValid } from './challenge-limits.js';
 import { normalizeSalesName, parseSalesNotification, startsNewPeriod } from './telegram-actions.js';
@@ -17,6 +17,8 @@ const ACTIVITY_CREDIT_GRANT_2026_09_22_MIGRATION = '2026-09-23-grant-activity-70
 const ZINKEVICH_PAYMENT_CREDIT_CORRECTION = '2026-09-22-move-zinkevich-high-payment-to-mid-v1';
 const MANAGER_NAME_SYNC_MIGRATION = '2026-09-22-correct-five-manager-names-and-resync-v2';
 const MISSING_SALES_NAMES_SYNC_MIGRATION = '2026-09-23-backfill-missing-sales-names-and-resync-v1';
+const FORCE_NEXT_GUARANTEED_SUPER_CHEST_MIGRATION = '2026-09-23-force-next-guaranteed-super-chest-v1';
+const FORCE_NEXT_GUARANTEED_SUPER_CHEST_CONTROL = 'force-next-guaranteed-super-chest-v1';
 const SUPER_PRIZE_LIMITS_MIGRATION = '2026-09-22-update-super-prize-limits-v1';
 const CERTIFICATE_DEMO_STOCK_MIGRATION = '2026-09-22-reset-demo-certificate-stock-v1';
 const ACTIVITY_CREDIT_GRANTS = Object.freeze({
@@ -644,6 +646,16 @@ function ensureTable() {
       await pool.query(`CREATE TABLE IF NOT EXISTS department_shop (id integer PRIMARY KEY CHECK (id = 1), data jsonb NOT NULL)`);
       await pool.query(`CREATE TABLE IF NOT EXISTS department_rules (id integer PRIMARY KEY CHECK (id = 1), data jsonb NOT NULL)`);
       await pool.query(`CREATE TABLE IF NOT EXISTS app_migrations (id text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())`);
+      await pool.query(`CREATE TABLE IF NOT EXISTS game_controls (id text PRIMARY KEY, remaining integer NOT NULL CHECK (remaining >= 0))`);
+      await pool.query(`
+        WITH claimed AS (
+          INSERT INTO app_migrations (id) VALUES ($1)
+          ON CONFLICT DO NOTHING RETURNING id
+        )
+        INSERT INTO game_controls (id, remaining)
+        SELECT $2, 1 FROM claimed
+        ON CONFLICT (id) DO NOTHING
+      `, [FORCE_NEXT_GUARANTEED_SUPER_CHEST_MIGRATION, FORCE_NEXT_GUARANTEED_SUPER_CHEST_CONTROL]);
       await pool.query(`
         CREATE TABLE IF NOT EXISTS telegram_action_credits (
           id bigserial PRIMARY KEY,
@@ -1068,7 +1080,17 @@ app.post('/api/open-case', async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(409).json({ error: 'В кейсе пока нет доступных наград.' });
     }
-    const outcome = drawCaseOutcome(items);
+    const ordinaryItems = items.filter(item => !item.superPrize);
+    const superItems = items.filter(item => item.superPrize);
+    const forced = ordinaryItems.length && superItems.length ? await client.query(`
+      UPDATE game_controls SET remaining = remaining - 1
+      WHERE id = $1 AND remaining > 0
+      RETURNING remaining
+    `, [FORCE_NEXT_GUARANTEED_SUPER_CHEST_CONTROL]) : { rows: [] };
+    const guaranteedSuper = forced.rows.length > 0;
+    const outcome = guaranteedSuper
+      ? { phase: 'chests', prize: drawCasePrize(superItems), guaranteedSuper: true }
+      : drawCaseOutcome(items);
     const prize = outcome.prize;
     if (outcome.phase === 'chests') {
       const updated = await client.query('UPDATE super_prize_inventory SET purchased = purchased + 1 WHERE prize_id = $1 AND purchased < limit_count RETURNING purchased', [prize.id]);
@@ -1078,7 +1100,7 @@ app.post('/api/open-case', async (req, res) => {
     const at = new Date().toISOString();
     let reward = null;
     if (outcome.phase === 'chests') {
-      const round = createChestRound(prize, items.filter(item => !item.superPrize));
+      const round = createChestRound(prize, ordinaryItems, undefined, outcome.guaranteedSuper === true);
       await client.query('INSERT INTO case_rounds (team_id, request_id, player_id, data) VALUES ($1, $2, $3, $4::jsonb)',
         [id, requestId, playerId, JSON.stringify(round)]);
       next.pendingCase = { requestId, playerId, at };
