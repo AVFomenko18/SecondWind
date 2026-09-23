@@ -1249,6 +1249,9 @@ app.get('/api/reward-feed', async (req, res) => {
       await rewardFeedRefresh;
     }
     res.setHeader('Cache-Control', 'private, max-age=5');
+    const etag = stateETag(rewardFeedCache);
+    res.setHeader('ETag', etag);
+    if (req.get('if-none-match') === etag) return res.status(304).end();
     res.json(rewardFeedCache);
   } catch (error) {
     databaseError(res, error);
@@ -1540,7 +1543,11 @@ app.get('/api/department', async (req, res) => {
       }, { steps: 0, payments: 0, laps: 0, calls: 0, activityDays: 0, crossSales: 0, coins: 0 });
       return { key, name: teamNames[key], players, totals, saved: Boolean(row), updatedAt: game.updated ?? row?.updated_at ?? null };
     });
-    res.json({ teams });
+    const payload = { teams };
+    const etag = stateETag(payload);
+    res.setHeader('ETag', etag);
+    if (req.get('if-none-match') === etag) return res.status(304).end();
+    res.json(payload);
   } catch (error) {
     databaseError(res, error);
   }

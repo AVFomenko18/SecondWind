@@ -20,8 +20,10 @@ test('large artwork is served as cacheable assets instead of embedded in HTML', 
 test('repeating dashboard feeds use conditional requests', () => {
   const game = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   const department = readFileSync(new URL('../department.html', import.meta.url), 'utf8');
+  const server = readFileSync(new URL('../server.js', import.meta.url), 'utf8');
   assert.match(game, /headers\['If-None-Match'\]=rewardFeedETag/);
   assert.match(game, /response\.status===304/);
   assert.match(department, /headers\['If-None-Match'\]=departmentETag/);
   assert.match(department, /response\.status===304/);
+  assert.equal((server.match(/req\.get\('if-none-match'\) === etag/g) || []).length, 2);
 });
