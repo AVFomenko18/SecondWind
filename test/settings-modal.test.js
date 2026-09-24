@@ -23,6 +23,15 @@ test('the settings cross closes every manager access', () => {
   assert.match(page, /aria-label="Закрыть настройки и завершить доступ"/);
 });
 
+test('manager settings do not expose a challenges tab', () => {
+  const start = page.indexOf('function settingsView(){');
+  const end = page.indexOf('\nfunction settingsContentView(){', start);
+  const settingsView = page.slice(start, end);
+  assert.doesNotMatch(settingsView, /\['challenges','Челленджи'\]/);
+  assert.doesNotMatch(settingsView, /challenges:challengesView/);
+  assert.match(page, /if\(!\['economy','roster','log'\]\.includes\(section\)\)section='economy'/);
+});
+
 test('reward delivery uses its own one-minute password dialog', () => {
   assert.match(page, /<dialog id="rewardAccessDialog"/);
   assert.match(page, /onsubmit="rewardAccessLogin\(event\)"/);
