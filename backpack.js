@@ -14,7 +14,7 @@ function backpackGroups(player){
   return [...groups.values()].sort((a,b)=>b.rewards.length-a.rewards.length||a.title.localeCompare(b.title,'ru'));
 }
 function backpackPrizeIcon(group){return caseCatalog?.miniPrizes?.find(item=>item.id===group.prizeId)?.icon||'🎁'}
-function backpackButtonView(player){return `<button type="button" class="backpack-button" title="Открыть рюкзак" aria-label="Открыть рюкзак ${esc(player.name)}" onclick="openBackpackForSelected()">🎒</button>`}
+function backpackButtonView(player){return `<button type="button" class="backpack-button" title="Открыть рюкзак" aria-label="Открыть рюкзак ${esc(player.name)}" onclick="openBackpackForSelected()"><span aria-hidden="true">🎒</span><b>Рюкзак</b></button>`}
 function openBackpackForSelected(){let player=pnow();if(player)openBackpack(player.id)}
 
 function openBackpack(playerId){
