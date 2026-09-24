@@ -10,6 +10,8 @@ const css = readFileSync(new URL('../runner-game.css', import.meta.url), 'utf8')
 test('run button opens the 30-second full-body robot runner with jump-only controls', () => {
   assert.match(page, /onclick="openRunnerGame\(\)"[^>]*>▶ Бежать/);
   assert.match(page, /id="runnerDialog"/);
+  assert.doesNotMatch(page, /МИНИ-ИГРА · 30 СЕКУНД/);
+  assert.doesNotMatch(page, /Робот на максимуме/);
   assert.match(page, /script src="runner-game\.js"/);
   assert.match(page, /href="runner-game\.css"/);
   assert.match(game, /RUNNER_DURATION_MS=30000/);
