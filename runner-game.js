@@ -3,6 +3,8 @@
 const RUNNER_DURATION_MS=30000;
 const RUNNER_COUNTDOWN_MS=2400;
 const RUNNER_MAX_COINS=3;
+const RUNNER_GROUND_SPEED=380;
+const RUNNER_BALL_SPEED=145;
 let miniRunner=null;
 
 function openRunnerGame(){
@@ -13,7 +15,7 @@ function openRunnerGame(){
   if(miniRunner?.active)return;
   const dialog=document.getElementById('runnerDialog'),track=document.getElementById('runnerTrack'),now=performance.now();
   track.querySelectorAll('.runner-object').forEach(node=>node.remove());
-  miniRunner={active:true,playerId:player.id,steps,id:'runner-'+uid(),countdownUntil:now+RUNNER_COUNTDOWN_MS,startedAt:0,lastFrame:now,nextObstacleAt:0,nextCoinAt:7000,y:0,velocity:0,duck:false,lives:3,collected:0,objects:[],invulnerableUntil:0,animation:0};
+  miniRunner={active:true,playerId:player.id,steps,id:'runner-'+uid(),countdownUntil:now+RUNNER_COUNTDOWN_MS,startedAt:0,lastFrame:now,nextObstacleAt:0,nextCoinAt:7000,y:0,velocity:0,lives:3,collected:0,objects:[],invulnerableUntil:0,animation:0};
   document.getElementById('runnerTime').textContent='30';
   document.getElementById('runnerCoins').textContent='0';
   document.getElementById('runnerLives').textContent='♥♥♥';
@@ -23,34 +25,30 @@ function openRunnerGame(){
   if(!dialog.open)dialog.showModal();
   track.focus();
   addEventListener('keydown',runnerKeyDown);
-  addEventListener('keyup',runnerKeyUp);
   miniRunner.animation=requestAnimationFrame(runnerFrame);
 }
 
 function runnerKeyDown(event){
   if(!miniRunner?.active)return;
-  if(['Space','ArrowUp','ArrowDown'].includes(event.code))event.preventDefault();
+  if(['Space','ArrowUp'].includes(event.code))event.preventDefault();
   if(event.code==='Space'||event.code==='ArrowUp')runnerJump();
-  if(event.code==='ArrowDown')runnerDuck(true);
 }
-function runnerKeyUp(event){if(event.code==='ArrowDown')runnerDuck(false)}
-function runnerJump(){if(!miniRunner?.active||miniRunner.startedAt===0||miniRunner.y>1)return;miniRunner.velocity=720;runnerDuck(false)}
-function runnerDuck(active){if(!miniRunner?.active)return;miniRunner.duck=Boolean(active)&&miniRunner.y<8;document.getElementById('runnerRobot')?.classList.toggle('duck',miniRunner.duck)}
+function runnerJump(){if(!miniRunner?.active||miniRunner.startedAt===0||miniRunner.y>1)return;miniRunner.velocity=720}
 
 function spawnRunnerObject(kind){
   if(!miniRunner?.active)return;
   const track=document.getElementById('runnerTrack'),element=document.createElement('span');
-  const settings=kind==='barrier'?{bottom:23,width:30,height:45,text:''}:kind==='ball'?{bottom:66,width:36,height:36,text:'🏀'}:{bottom:Math.random()<.5?34:88,width:34,height:34,text:'₽'};
+  const settings=kind==='barrier'?{bottom:23,width:30,height:45,text:'',speed:RUNNER_GROUND_SPEED}:kind==='ball'?{bottom:118,width:38,height:38,text:'🏀',speed:RUNNER_BALL_SPEED}:{bottom:Math.random()<.5?34:88,width:34,height:34,text:'₽',speed:RUNNER_GROUND_SPEED};
   element.className='runner-object '+kind;element.textContent=settings.text;track.append(element);
   const item={kind,element,x:track.clientWidth+30,...settings};
-  element.style.bottom=settings.bottom+'px';element.style.transform='translateX('+item.x+'px)';
+  element.style.bottom=settings.bottom+'px';element.style.left=item.x+'px';
   miniRunner.objects.push(item);
 }
 
 function runnerOverlap(item){
-  const robotLeft=Math.max(36,document.getElementById('runnerTrack').clientWidth*.09),robotRight=robotLeft+50;
+  const robotLeft=Math.max(36,document.getElementById('runnerTrack').clientWidth*.09),robotRight=robotLeft+58;
   if(item.x>robotRight||item.x+item.width<robotLeft)return false;
-  const robotBottom=23+miniRunner.y,robotTop=robotBottom+(miniRunner.duck?35:62);
+  const robotBottom=23+miniRunner.y,robotTop=robotBottom+88;
   return item.bottom<robotTop&&item.bottom+item.height>robotBottom;
 }
 
@@ -65,13 +63,11 @@ function runnerFrame(now){
   const elapsed=now-game.startedAt,delta=Math.min(.04,(now-game.lastFrame)/1000);game.lastFrame=now;
   document.getElementById('runnerTime').textContent=String(Math.max(0,Math.ceil((RUNNER_DURATION_MS-elapsed)/1000)));
   game.velocity-=1800*delta;game.y=Math.max(0,game.y+game.velocity*delta);if(game.y===0&&game.velocity<0)game.velocity=0;
-  if(game.y>8)runnerDuck(false);
   document.getElementById('runnerRobot').style.bottom=(23+game.y)+'px';
   if(elapsed>=game.nextObstacleAt){spawnRunnerObject(Math.random()<.56?'barrier':'ball');game.nextObstacleAt=elapsed+1050+Math.random()*650}
   if(game.collected<RUNNER_MAX_COINS&&elapsed>=game.nextCoinAt){spawnRunnerObject('coin');game.nextCoinAt+=9000}
-  const speed=260+elapsed/180;
   for(const item of game.objects){
-    if(item.removed)continue;item.x-=speed*delta;item.element.style.transform='translateX('+item.x+'px)';
+    if(item.removed)continue;item.x-=item.speed*delta;item.element.style.left=item.x+'px';
     if(runnerOverlap(item)){
       if(item.kind==='coin'){
         item.removed=true;game.collected++;document.getElementById('runnerCoins').textContent=String(game.collected);item.element.classList.add('collected');setTimeout(()=>item.element.remove(),300);
@@ -88,7 +84,7 @@ function runnerFrame(now){
 
 function finishRunnerGame(finished){
   const game=miniRunner;if(!game?.active)return;
-  game.active=false;cancelAnimationFrame(game.animation);removeEventListener('keydown',runnerKeyDown);removeEventListener('keyup',runnerKeyUp);game.duck=false;document.getElementById('runnerRobot')?.classList.remove('duck');
+  game.active=false;cancelAnimationFrame(game.animation);removeEventListener('keydown',runnerKeyDown);
   const total=game.collected+(finished?1:0),result=document.getElementById('runnerResult');
   result.hidden=false;result.innerHTML='<strong>'+(finished?'Финиш! 🏁':'Забег завершён')+'</strong><span>Собрано на трассе: '+game.collected+' мон.<br>'+(finished?'Бонус за финиш: +1 мон.':'Бонус за финиш не получен.')+'</span><button type="button" onclick="completeRunnerGame('+(finished?'true':'false')+')">Продолжить ход · +'+total+' мон.</button>';
 }
@@ -103,7 +99,7 @@ function completeRunnerGame(finished){
 
 function skipRunnerGame(){
   const game=miniRunner;if(!game)return document.getElementById('runnerDialog')?.close();
-  if(game.active){game.active=false;cancelAnimationFrame(game.animation);removeEventListener('keydown',runnerKeyDown);removeEventListener('keyup',runnerKeyUp)}
+  if(game.active){game.active=false;cancelAnimationFrame(game.animation);removeEventListener('keydown',runnerKeyDown)}
   const player=state.players.find(item=>item.id===game.playerId),dialog=document.getElementById('runnerDialog');dialog.close();miniRunner=null;
   if(player){selected=player.id;movePlayer(game.steps)}
 }

@@ -7,7 +7,7 @@ const page = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const game = readFileSync(new URL('../runner-game.js', import.meta.url), 'utf8');
 const css = readFileSync(new URL('../runner-game.css', import.meta.url), 'utf8');
 
-test('run button opens the 30-second robot runner with both obstacle types', () => {
+test('run button opens the 30-second full-body robot runner with jump-only controls', () => {
   assert.match(page, /onclick="openRunnerGame\(\)"[^>]*>▶ Бежать/);
   assert.match(page, /id="runnerDialog"/);
   assert.match(page, /script src="runner-game\.js"/);
@@ -15,7 +15,16 @@ test('run button opens the 30-second robot runner with both obstacle types', () 
   assert.match(game, /RUNNER_DURATION_MS=30000/);
   assert.match(game, /'barrier':'ball'/);
   assert.match(game, /text:'🏀'/);
+  assert.match(game, /RUNNER_GROUND_SPEED=380/);
+  assert.match(game, /RUNNER_BALL_SPEED=145/);
+  assert.match(game, /bottom:118/);
   assert.match(css, /\.runner-object\.barrier/);
+  assert.match(page, /runner-robot-torso/);
+  assert.match(page, /runner-robot-leg left/);
+  assert.doesNotMatch(page, /runnerDuck/);
+  assert.doesNotMatch(page, /Пригнуться/);
+  assert.doesNotMatch(page, /стрелка вниз/);
+  assert.doesNotMatch(game, /ArrowDown/);
 });
 
 test('runner can award up to three collected coins and one finish coin', () => {
