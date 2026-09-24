@@ -21,7 +21,9 @@ function exchangeStates(){
 
 test('athlete card opens a backpack with accumulated mini-prize history',()=>{
   assert.match(page,/backpack\.css/);assert.match(page,/backpack\.js/);assert.match(page,/id="backpackDialog"/);
-  assert.match(page,/backpackButtonView\(p\)/);assert.match(script,/🎒<\/span><b>Рюкзак<\/b>/);assert.match(script,/История мини-призов/);
+  assert.match(page,/\$\{p\?`\$\{backpackButtonView\(p\)\}<div class="athlete-card">/);
+  assert.doesNotMatch(page,/СБОРНАЯ ПЕРИОДА|<h2>Наш состав<\/h2>/);
+  assert.match(script,/🎒<\/span><b>Рюкзак<\/b>/);assert.match(script,/История мини-призов/);
   assert.match(script,/Три одинаковых мини-приза можно обменять на одну монету/);
   assert.match(css,/\.backpack-gold-coin/);
 });
