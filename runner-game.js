@@ -2,7 +2,6 @@
 
 const RUNNER_DURATION_MS=30000;
 const RUNNER_COUNTDOWN_MS=2400;
-const RUNNER_MAX_COINS=1;
 const RUNNER_GROUND_SPEED=380;
 const RUNNER_BALL_SPEED=145;
 const RUNNER_HAZARD_GAP_MS=3000;
@@ -44,10 +43,7 @@ function createRunnerCourse(){
     events.push({kind:Math.random()<.58?'barrier':'ball',arrival});
     arrival+=RUNNER_HAZARD_GAP_MS+Math.random()*700;
   }
-  const safeCoinTimes=[];
-  for(let time=6500;time<=23500;time+=250)if(events.every(event=>Math.abs(event.arrival-time)>=1250))safeCoinTimes.push(time);
-  const coinArrival=safeCoinTimes.length?safeCoinTimes[Math.floor(Math.random()*safeCoinTimes.length)]:15000;
-  events.push({kind:'coin',arrival:coinArrival},{kind:'finish',arrival:28800},{kind:'finish-coin',arrival:29700});
+  events.push({kind:'finish',arrival:28800},{kind:'finish-coin',arrival:29700});
   return events.sort((a,b)=>a.arrival-b.arrival);
 }
 
@@ -57,8 +53,7 @@ function spawnRunnerObject(kind,arrival){
   const settings=kind==='barrier'?{bottom:23,width:30,height:45,text:'',speed:RUNNER_GROUND_SPEED}:
     kind==='ball'?{bottom:142,width:38,height:38,text:'🏀',speed:RUNNER_BALL_SPEED}:
     kind==='finish'?{bottom:23,width:24,height:215,text:'',speed:RUNNER_GROUND_SPEED}:
-    kind==='finish-coin'?{bottom:48,width:68,height:68,text:'₽',speed:RUNNER_GROUND_SPEED}:
-    {bottom:88,width:34,height:34,text:'₽',speed:RUNNER_GROUND_SPEED};
+    {bottom:48,width:68,height:68,text:'₽',speed:RUNNER_GROUND_SPEED};
   element.className='runner-object '+kind;element.textContent=settings.text;track.append(element);
   const robotLeft=Math.max(36,track.clientWidth*.09),item={kind,element,x:robotLeft+settings.speed*arrival/1000,...settings};
   element.style.bottom=settings.bottom+'px';element.style.left=item.x+'px';
@@ -89,9 +84,7 @@ function runnerFrame(now){
   for(const item of game.objects){
     if(item.removed)continue;item.x-=item.speed*delta;item.element.style.left=item.x+'px';
     if(runnerOverlap(item)){
-      if(item.kind==='coin'){
-        item.removed=true;game.collected++;document.getElementById('runnerCoins').textContent=String(game.collected);item.element.classList.add('collected');setTimeout(()=>item.element.remove(),300);
-      }else if(item.kind==='finish-coin'){
+      if(item.kind==='finish-coin'){
         item.removed=true;document.getElementById('runnerCoins').textContent=String(game.collected+1);item.element.classList.add('collected');setTimeout(()=>item.element.remove(),300);
       }else if((item.kind==='barrier'||item.kind==='ball')&&now>=game.invulnerableUntil){
         item.removed=true;item.element.remove();game.lives--;game.invulnerableUntil=now+1300;document.getElementById('runnerLives').textContent='♥'.repeat(game.lives)+'♡'.repeat(3-game.lives);const robot=document.getElementById('runnerRobot');robot.classList.add('hit');setTimeout(()=>robot?.classList.remove('hit'),950);if(game.lives<=0){finishRunnerGame(false);return}
@@ -108,7 +101,7 @@ function finishRunnerGame(finished){
   const game=miniRunner;if(!game?.active)return;
   game.active=false;cancelAnimationFrame(game.animation);removeEventListener('keydown',runnerKeyDown);
   const total=game.collected+(finished?1:0),result=document.getElementById('runnerResult');
-  result.hidden=false;result.innerHTML='<strong>'+(finished?'Финиш! 🏁':'Забег завершён')+'</strong><span>Собрано на трассе: '+game.collected+' мон.<br>'+(finished?'Бонус за финиш: +1 мон.':'Бонус за финиш не получен.')+'</span><button type="button" onclick="completeRunnerGame('+(finished?'true':'false')+')">Продолжить ход · +'+total+' мон.</button>';
+  result.hidden=false;result.innerHTML='<strong>'+(finished?'Финиш! 🏁':'Забег завершён')+'</strong><span>'+(finished?'Большая монета за финишем: +1 мон.':'До большой монеты за финишем добежать не удалось.')+'</span><button type="button" onclick="completeRunnerGame('+(finished?'true':'false')+')">Продолжить ход · +'+total+' мон.</button>';
 }
 
 function completeRunnerGame(finished){
