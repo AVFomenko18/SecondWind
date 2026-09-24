@@ -93,6 +93,7 @@ export function publicUpdateValid(before, after, verifyHistory = true) {
       !isDeepStrictEqual(after.ledger.slice(0, before.ledger.length), before.ledger)) return false;
   const seen = new Set();
   const expectedMilestones = new Map();
+  const movedPlayers = new Set();
   let changed = false;
   for (let i = 0; i < after.players.length; i++) {
     const player = after.players[i], old = before.players[i] || {
@@ -126,6 +127,7 @@ export function publicUpdateValid(before, after, verifyHistory = true) {
     const earned = earnedStepsForPlayer(old, player, before.config?.actions || []);
     if (earned === null || !halfStep(earned) || !Number.isSafeInteger(player.pos - old.pos) ||
         player.bank !== old.bank + earned - (player.pos - old.pos)) return false;
+    if (player.pos !== old.pos) movedPlayers.add(player.id);
     if (player.pos !== old.pos || earned || player.sport !== old.sport || player.avatar !== old.avatar) changed = true;
     for (let ref = (Math.floor(old.high / CHECKPOINT_EVERY) + 1) * CHECKPOINT_EVERY; ref <= player.high; ref += CHECKPOINT_EVERY) {
       expectedMilestones.set(player.id + ':' + ref, ref % 60 === 0 ? LAP_COINS : CHECKPOINT_COINS);
@@ -133,8 +135,22 @@ export function publicUpdateValid(before, after, verifyHistory = true) {
     }
   }
   const additions = after.ledger.slice(before.ledger.length);
-  if (additions.length !== expectedMilestones.size) return false;
+  const runnerCounts = new Map(), runnerFinishes = new Set();
+  if (additions.length < expectedMilestones.size || additions.length > expectedMilestones.size + movedPlayers.size * 4) return false;
   for (const entry of additions) {
+    if (entry?.source === 'runner') {
+      if (!movedPlayers.has(entry.playerId) || entry.amount !== 1 || typeof entry.id !== 'string' || !entry.id ||
+          typeof entry.ref !== 'string' || !/^runner-[A-Za-z0-9-]{1,90}-(?:coin-[1-3]|finish)$/.test(entry.ref) ||
+          typeof entry.title !== 'string' || !Number.isFinite(Date.parse(entry.at))) return false;
+      const run = entry.ref.replace(/-(?:coin-[1-3]|finish)$/, ''), key = entry.playerId + ':' + run;
+      runnerCounts.set(key, (runnerCounts.get(key) || 0) + 1);
+      if (runnerCounts.get(key) > 4) return false;
+      if (entry.ref.endsWith('-finish')) {
+        if (runnerFinishes.has(key)) return false;
+        runnerFinishes.add(key);
+      }
+      continue;
+    }
     const key = entry?.playerId + ':' + entry?.ref;
     if (!expectedMilestones.has(key) || entry.source !== 'milestone' ||
         entry.amount !== expectedMilestones.get(key) ||
@@ -142,6 +158,7 @@ export function publicUpdateValid(before, after, verifyHistory = true) {
         typeof entry.title !== 'string' || !Number.isFinite(Date.parse(entry.at))) return false;
     expectedMilestones.delete(key);
   }
+  if (expectedMilestones.size) return false;
   if ((changed || additions.length > 0) && !newLogs.length) return false;
   if (newLogs.length === 1 && !singleActionValid(before, after)) return false;
   if (verifyHistory) {
