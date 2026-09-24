@@ -70,6 +70,41 @@ export function rewardDeliveryUpdateValid(before, after) {
   restored.logs.shift();
   return isDeepStrictEqual(without(restored, ['updated','undo']), without(before, ['updated','undo']));
 }
+
+export function miniPrizeExchangeUpdateValid(before, after) {
+  if (!before || !after || !Array.isArray(before.rewards) || !Array.isArray(after.rewards) ||
+      !Array.isArray(before.ledger) || !Array.isArray(after.ledger) || !Array.isArray(before.logs) || !Array.isArray(after.logs) ||
+      before.rewards.length !== after.rewards.length || after.ledger.length !== before.ledger.length + 1 ||
+      after.logs.length !== before.logs.length + 1 || !Number.isFinite(Date.parse(after.updated)) || after.undo !== null) return false;
+  if (!isDeepStrictEqual(without(before, ['rewards','ledger','logs','updated','undo']), without(after, ['rewards','ledger','logs','updated','undo'])) ||
+      !isDeepStrictEqual(after.ledger.slice(0, -1), before.ledger) || !isDeepStrictEqual(after.logs.slice(1), before.logs)) return false;
+  const changed = [];
+  for (let index = 0; index < before.rewards.length; index++) {
+    const previous = before.rewards[index], incoming = after.rewards[index];
+    if (isDeepStrictEqual(previous, incoming)) continue;
+    if (!isDeepStrictEqual(without(previous, ['exchanged','exchangedAt','exchangeId']), without(incoming, ['exchanged','exchangedAt','exchangeId'])) ||
+        previous.miniPrize !== true || previous.cancelled || previous.exchanged === true || incoming.exchanged !== true ||
+        typeof incoming.exchangeId !== 'string' || !/^exchange-[A-Za-z0-9-]{1,90}$/.test(incoming.exchangeId) ||
+        !Number.isFinite(Date.parse(incoming.exchangedAt))) return false;
+    changed.push({ previous, incoming });
+  }
+  if (changed.length !== 3) return false;
+  const first = changed[0];
+  if (changed.some(({ previous, incoming }) => previous.playerId !== first.previous.playerId ||
+      previous.prizeId !== first.previous.prizeId || previous.title !== first.previous.title ||
+      incoming.exchangeId !== first.incoming.exchangeId || incoming.exchangedAt !== first.incoming.exchangedAt)) return false;
+  const entry = after.ledger.at(-1);
+  if (!entry || typeof entry.id !== 'string' || !entry.id || entry.playerId !== first.previous.playerId || entry.amount !== 1 ||
+      entry.source !== 'exchange' || entry.ref !== first.incoming.exchangeId ||
+      entry.title !== `Обмен 3 мини-призов: ${first.previous.title}` || !Number.isFinite(Date.parse(entry.at))) return false;
+  const log = after.logs[0];
+  if (!log || typeof log.id !== 'string' || !log.id || typeof log.text !== 'string' || !log.text ||
+      !Number.isFinite(Date.parse(log.at)) || log.reverse?.kind !== 'patch') return false;
+  const restored = structuredClone(after);
+  if (!applyReverse(restored, log.reverse.ops, ['rewards','ledger'])) return false;
+  restored.logs.shift();
+  return isDeepStrictEqual(without(restored, ['updated','undo']), without(before, ['updated','undo']));
+}
 function singleActionValid(before, after) {
   let actions = after.players.length - before.players.length;
   if (actions > 1) return false;

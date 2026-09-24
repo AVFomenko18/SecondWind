@@ -13,6 +13,7 @@ test('game polling pauses for hidden and idle tabs and uses slower refresh inter
   assert.match(html, /tab==='board'&&backgroundRefreshAllowed\(\).*loadRewardFeed/);
   assert.doesNotMatch(html, /setInterval\([^\n]+,5000\)/);
   assert.match(html, /if\(rewardDataDirty\)\{rewardDataDirty=false;void loadPrizeStock\(\);void loadRewardFeed\(true\)\}/);
+  assert.match(html, /function rewardFeedShape\(rewards\).*delete item\.exchanged/);
   assert.doesNotMatch(html, /syncStatus\('● Сохранено на сервере'\);void loadPrizeStock\(\);void loadRewardFeed\(true\)/);
 });
 

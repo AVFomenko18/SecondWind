@@ -3,7 +3,7 @@ import pg from 'pg';
 import { createHmac, createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { CASE_COST, MINI_PRIZES, SUPER_CHEST_CHANCE, casePool, drawCasePrize, drawCaseOutcome, createChestRound } from './case.js';
-import { publicUpdateValid, rewardDeliveryUpdateValid } from './game-integrity.js';
+import { miniPrizeExchangeUpdateValid, publicUpdateValid, rewardDeliveryUpdateValid } from './game-integrity.js';
 import { dailyChallengeAdditionsValid } from './challenge-limits.js';
 import { normalizeSalesName, parseSalesNotification, startsNewPeriod } from './telegram-actions.js';
 import { FOMENKO_ALIASES, ROSTER_ALIASES, TEAM_ROSTERS, TELEGRAM_NAME_OVERRIDES } from './team-rosters.js';
@@ -1428,11 +1428,12 @@ app.post('/api/game-state', async (req, res) => {
     }
     const adminAccess = isAdmin(req);
     const deliveryAccess = !adminAccess && hasRewardAccess(req) && rewardDeliveryUpdateValid(before, req.body);
-    if (!adminAccess && !deliveryAccess && (!current.rows.length || protectedChange(before, req.body))) {
+    const miniPrizeExchange = !adminAccess && !deliveryAccess && miniPrizeExchangeUpdateValid(before, req.body);
+    if (!adminAccess && !deliveryAccess && !miniPrizeExchange && (!current.rows.length || protectedChange(before, req.body))) {
       await client.query('ROLLBACK');
       return res.status(403).json({ error: 'Изменять настройки, историю и челленджи может только руководитель группы.' });
     }
-    if (!adminAccess && !deliveryAccess && !publicUpdateValid(before, req.body)) {
+    if (!adminAccess && !deliveryAccess && !miniPrizeExchange && !publicUpdateValid(before, req.body)) {
       await client.query('ROLLBACK');
       return res.status(422).json({ error: 'Игровые шаги, монетки и награды не совпадают с выполненными действиями.' });
     }
@@ -1634,7 +1635,7 @@ app.get('/api/department', async (req, res) => {
         calls: nonnegativeNumber(player.calls),
         activityDays: Object.keys(player.actionCounts || {}).filter(key => /^activity-\d{4}-\d{2}-\d{2}(?:-\d+)?$/.test(key)).length,
         crossSales: nonnegativeNumber(player.cross),
-        coins: ledger.reduce((sum, item) => sum + (item?.playerId === player.id && ['milestone', 'challenge', 'manual', 'runner'].includes(item?.source) ? nonnegativeNumber(item.amount) : 0), 0)
+        coins: ledger.reduce((sum, item) => sum + (item?.playerId === player.id && ['milestone', 'challenge', 'manual', 'runner', 'exchange'].includes(item?.source) ? nonnegativeNumber(item.amount) : 0), 0)
       }));
       const totals = players.reduce((sum, player) => {
         for (const key of ['steps', 'payments', 'laps', 'calls', 'activityDays', 'crossSales', 'coins']) sum[key] += player[key];
