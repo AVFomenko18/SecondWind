@@ -12,17 +12,24 @@ test('typing in settings cannot trigger backdrop close', () => {
   assert.ok(page.includes('onsubmit="event.preventDefault();grantManagerCoins(event)"'));
 });
 
-test('closing settings keeps the manager session for reward actions', () => {
+test('the settings cross closes every manager access', () => {
   const closeStart = page.indexOf('async function closeSettings(){');
   const closeEnd = page.indexOf('\nasync function openGameTab(', closeStart);
-  const logoutStart = page.indexOf('async function logoutSettings(){');
-  const logoutEnd = page.indexOf('\nfunction setSettingsSection(', logoutStart);
   assert.ok(closeStart >= 0 && closeEnd > closeStart);
-  assert.ok(logoutStart >= 0 && logoutEnd > logoutStart);
-  assert.doesNotMatch(page.slice(closeStart, closeEnd), /adminLogout/);
-  assert.match(page.slice(logoutStart, logoutEnd), /adminLogout\(false\)/);
-  assert.match(page, /onclick="logoutSettings\(\)">Выйти<\/button>/);
-  assert.match(page, /function claim\(i\)\{if\(!adminWrite\(\)\)return;/);
+  assert.match(page.slice(closeStart, closeEnd), /adminLogout\(false\)/);
+  assert.match(page.slice(closeStart, closeEnd), /clearRewardAccess\(\)/);
+  assert.doesNotMatch(page, /function logoutSettings\(/);
+  assert.doesNotMatch(page, /onclick="logoutSettings\(\)">Выйти<\/button>/);
+  assert.match(page, /aria-label="Закрыть настройки и завершить доступ"/);
+});
+
+test('reward delivery uses its own one-minute password dialog', () => {
+  assert.match(page, /<dialog id="rewardAccessDialog"/);
+  assert.match(page, /onsubmit="rewardAccessLogin\(event\)"/);
+  assert.match(page, /Открыть доступ на 1 минуту/);
+  assert.match(page, /function claim\(i\).*rewardAccessActive\(\)/);
+  assert.match(page, /fetch\('\/api\/reward-access\/login'/);
+  assert.match(page, /function claimReward\(i\)\{if\(!writable\(\)\)return;/);
 });
 
 test('an older session response cannot replace the manager settings after login', async () => {

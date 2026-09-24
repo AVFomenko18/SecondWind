@@ -23,14 +23,13 @@ test('delete controls are in the manager roster, not the public team list', () =
   assert.ok(page.includes("if(!settingsOpen||settingsSection!=='roster'||!adminWrite())return;"));
 });
 
-test('settings open above the current page and only explicit exit ends the manager session', () => {
+test('settings open above the current page and the cross ends the manager session', () => {
   assert.ok(page.includes('<dialog id="settingsDialog"'));
   assert.ok(page.includes('body.innerHTML=settingsView();if(!dialog.open)dialog.showModal()'));
   assert.ok(page.includes("if(id==='settings'){if(settingsOpen)return;settingsOpen=true;renderSettingsModal();void checkAdmin();void loadActionCredits();return}"));
   const closeSettings = page.slice(page.indexOf('async function closeSettings(){'), page.indexOf('\nasync function openGameTab('));
-  const logoutSettings = page.slice(page.indexOf('async function logoutSettings(){'), page.indexOf('\nfunction setSettingsSection('));
-  assert.ok(!closeSettings.includes('adminLogout'));
-  assert.ok(logoutSettings.includes('if(await adminLogout(false)===false)return false;settingsOpen=false;'));
+  assert.ok(closeSettings.includes('if(await adminLogout(false)===false)return false;'));
+  assert.ok(closeSettings.includes('await clearRewardAccess();settingsOpen=false;'));
   assert.ok(page.includes('oncancel="event.preventDefault();closeSettings()"'));
 });
 

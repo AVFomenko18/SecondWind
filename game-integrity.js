@@ -19,11 +19,11 @@ function activityDayAllowed(key) {
   // The browser records its local calendar day; it can be one day ahead of Moscow.
   return Number.isInteger(difference) && difference >= -1 && difference <= 1;
 }
-function applyReverse(root, ops) {
+function applyReverse(root, ops, allowedRoots = ['players','ledger']) {
   if (!Array.isArray(ops) || ops.length > 10000) return false;
   for (const op of ops) {
     if (!op || !Array.isArray(op.path) || !op.path.length || op.path.length > 30 ||
-        !['players','ledger'].includes(op.path[0]) ||
+        !allowedRoots.includes(op.path[0]) ||
         op.path.some(part => ['__proto__','constructor','prototype'].includes(part))) return false;
     let parent = root;
     for (const part of op.path.slice(0, -1)) {
@@ -44,6 +44,31 @@ function applyReverse(root, ops) {
     } else return false;
   }
   return true;
+}
+
+export function rewardDeliveryUpdateValid(before, after) {
+  if (!before || !after || !Array.isArray(before.rewards) || !Array.isArray(after.rewards) ||
+      !Array.isArray(before.logs) || !Array.isArray(after.logs) || before.rewards.length !== after.rewards.length ||
+      after.logs.length !== before.logs.length + 1 || !Number.isFinite(Date.parse(after.updated)) || after.undo !== null) return false;
+  if (!isDeepStrictEqual(without(before, ['rewards','logs','updated','undo']), without(after, ['rewards','logs','updated','undo'])) ||
+      !isDeepStrictEqual(after.logs.slice(1), before.logs)) return false;
+  let changed = 0;
+  for (let index = 0; index < before.rewards.length; index++) {
+    const previous = before.rewards[index], incoming = after.rewards[index];
+    if (!isDeepStrictEqual(without(previous, ['claimed','claimedAt']), without(incoming, ['claimed','claimedAt']))) return false;
+    if (previous.claimed === incoming.claimed && previous.claimedAt === incoming.claimedAt) continue;
+    if (typeof previous.claimed !== 'boolean' || typeof incoming.claimed !== 'boolean' || previous.claimed === incoming.claimed) return false;
+    if (incoming.claimed ? !Number.isFinite(Date.parse(incoming.claimedAt)) : Object.hasOwn(incoming, 'claimedAt')) return false;
+    changed++;
+  }
+  if (changed !== 1) return false;
+  const log = after.logs[0];
+  if (!log || typeof log.id !== 'string' || !log.id || typeof log.text !== 'string' || !log.text ||
+      !Number.isFinite(Date.parse(log.at)) || log.reverse?.kind !== 'patch') return false;
+  const restored = structuredClone(after);
+  if (!applyReverse(restored, log.reverse.ops, ['rewards'])) return false;
+  restored.logs.shift();
+  return isDeepStrictEqual(without(restored, ['updated','undo']), without(before, ['updated','undo']));
 }
 function singleActionValid(before, after) {
   let actions = after.players.length - before.players.length;

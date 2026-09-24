@@ -32,17 +32,42 @@ test('marking a reward delivered records time and returning it clears that time'
   const reward = { playerId: 'player-1', title: 'Обед', claimed: false, cancelled: false };
   const context = {
     state: { players: [{ id: 'player-1', name: 'Саша' }], rewards: [reward] },
-    adminWrite: () => true, snapshot: () => {}, log: () => {}, commit: () => {}
+    writable: () => true, snapshot: () => {}, log: () => {}, commit: () => {},
+    rewardAccessUntil: Date.now() + 60000, pendingClaimIndex: null, rewardAccessTimer: null,
+    document: { getElementById: () => null }
+  };
+  vm.createContext(context);
+  vm.runInContext(page.slice(start, end), context);
+  context.claimReward(0);
+  assert.equal(reward.claimed, true);
+  assert.ok(Number.isFinite(Date.parse(reward.claimedAt)));
+  context.claimReward(0);
+  assert.equal(reward.claimed, false);
+  assert.equal(Object.hasOwn(reward, 'claimedAt'), false);
+  context.writable = () => false;
+  context.claimReward(0);
+  assert.equal(reward.claimed, false);
+});
+
+test('marking a reward asks for a password when the minute access expired', () => {
+  const start = page.indexOf('function rewardAccessActive(){');
+  const end = page.indexOf('\nfunction claimReward(', start);
+  let shown = 0, focused = 0;
+  const fields = {
+    rewardAccessDialog: { open: false, showModal() { this.open = true; shown++; } },
+    rewardAccessPassword: { value: 'old', focus() { focused++; } },
+    rewardAccessError: { textContent: 'old error' }
+  };
+  const context = {
+    state: { rewards: [{ claimed: false, cancelled: false }] }, rewardAccessUntil: 0, pendingClaimIndex: null,
+    document: { getElementById: id => fields[id] }
   };
   vm.createContext(context);
   vm.runInContext(page.slice(start, end), context);
   context.claim(0);
-  assert.equal(reward.claimed, true);
-  assert.ok(Number.isFinite(Date.parse(reward.claimedAt)));
-  context.claim(0);
-  assert.equal(reward.claimed, false);
-  assert.equal(Object.hasOwn(reward, 'claimedAt'), false);
-  context.adminWrite = () => false;
-  context.claim(0);
-  assert.equal(reward.claimed, false);
+  assert.equal(context.pendingClaimIndex, 0);
+  assert.equal(shown, 1);
+  assert.equal(focused, 1);
+  assert.equal(fields.rewardAccessPassword.value, '');
+  assert.equal(fields.rewardAccessError.textContent, '');
 });

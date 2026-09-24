@@ -3,7 +3,7 @@ import pg from 'pg';
 import { createHmac, createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { CASE_COST, MINI_PRIZES, SUPER_CHEST_CHANCE, casePool, drawCasePrize, drawCaseOutcome, createChestRound } from './case.js';
-import { publicUpdateValid } from './game-integrity.js';
+import { publicUpdateValid, rewardDeliveryUpdateValid } from './game-integrity.js';
 import { dailyChallengeAdditionsValid } from './challenge-limits.js';
 import { normalizeSalesName, parseSalesNotification, startsNewPeriod } from './telegram-actions.js';
 import { FOMENKO_ALIASES, ROSTER_ALIASES, TEAM_ROSTERS, TELEGRAM_NAME_OVERRIDES } from './team-rosters.js';
@@ -193,7 +193,9 @@ app.use('/assets', express.static('assets', { maxAge: '1y', immutable: true }));
 app.use(express.static('.'));
 
 const ADMIN_COOKIE = 'secondwind_admin';
+const REWARD_COOKIE = 'secondwind_reward_access';
 const SESSION_MS = 8 * 60 * 60 * 1000;
+const REWARD_SESSION_MS = 60 * 1000;
 const loginAttempts = new Map();
 function equalSecret(a, b) {
   const left = createHash('sha256').update(a).digest();
@@ -203,12 +205,19 @@ function equalSecret(a, b) {
 function signature(expires) {
   return createHmac('sha256', process.env.ADMIN_PASSWORD).update(`secondwind-admin:${expires}`).digest('hex');
 }
-function isAdmin(req) {
-  if (!process.env.ADMIN_PASSWORD) return false;
-  const cookie = (req.headers.cookie || '').split(';').map(x => x.trim()).find(x => x.startsWith(`${ADMIN_COOKIE}=`));
-  const match = cookie?.slice(ADMIN_COOKIE.length + 1).match(/^(\d{13})\.([a-f0-9]{64})$/);
-  return Boolean(match && Number(match[1]) > Date.now() && equalSecret(match[2], signature(match[1])));
+function rewardSignature(expires) {
+  return createHmac('sha256', process.env.ADMIN_PASSWORD).update(`secondwind-reward:${expires}`).digest('hex');
 }
+function signedCookieValid(req, name, sign) {
+  if (!process.env.ADMIN_PASSWORD) return false;
+  const cookie = (req.headers.cookie || '').split(';').map(x => x.trim()).find(x => x.startsWith(`${name}=`));
+  const match = cookie?.slice(name.length + 1).match(/^(\d{13})\.([a-f0-9]{64})$/);
+  return Boolean(match && Number(match[1]) > Date.now() && equalSecret(match[2], sign(match[1])));
+}
+function isAdmin(req) {
+  return signedCookieValid(req, ADMIN_COOKIE, signature);
+}
+function hasRewardAccess(req) { return signedCookieValid(req, REWARD_COOKIE, rewardSignature); }
 function sameOrigin(req) {
   const origin = req.get('origin');
   if (!origin) return true;
@@ -220,24 +229,45 @@ function adminCookie(req, value, maxAge) {
   const secure = req.secure || req.get('x-forwarded-proto') === 'https';
   return `${ADMIN_COOKIE}=${value}; Path=/api; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${secure ? '; Secure' : ''}`;
 }
-app.get('/api/admin/session', (req, res) => res.json({ authenticated: isAdmin(req), configured: Boolean(process.env.ADMIN_PASSWORD) }));
-app.post('/api/admin/login', (req, res) => {
-  if (!sameOrigin(req)) return res.status(403).json({ error: 'Недопустимый источник запроса.' });
-  if (!process.env.ADMIN_PASSWORD) return res.status(503).json({ error: 'На Render не задан ADMIN_PASSWORD. Руководитель должен добавить его в Environment.' });
+function rewardCookie(req, value, maxAge) {
+  const secure = req.secure || req.get('x-forwarded-proto') === 'https';
+  return `${REWARD_COOKIE}=${value}; Path=/api; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${secure ? '; Secure' : ''}`;
+}
+function passwordAccepted(req, res) {
+  if (!process.env.ADMIN_PASSWORD) { res.status(503).json({ error: 'На Render не задан ADMIN_PASSWORD. Руководитель должен добавить его в Environment.' }); return false; }
   const key = req.ip;
   const attempt = loginAttempts.get(key) || { count: 0, until: 0 };
-  if (attempt.until > Date.now()) return res.status(429).json({ error: 'Слишком много попыток. Повторите через 15 минут.' });
+  if (attempt.until > Date.now()) { res.status(429).json({ error: 'Слишком много попыток. Повторите через 15 минут.' }); return false; }
   const password = req.body?.password;
   if (typeof password !== 'string' || !equalSecret(password, process.env.ADMIN_PASSWORD)) {
     attempt.count++;
     if (attempt.count >= 5) { attempt.count = 0; attempt.until = Date.now() + 15 * 60 * 1000; }
     loginAttempts.set(key, attempt);
-    return res.status(401).json({ error: 'Неверный пароль.' });
+    res.status(401).json({ error: 'Неверный пароль.' });
+    return false;
   }
   loginAttempts.delete(key);
+  return true;
+}
+app.get('/api/admin/session', (req, res) => res.json({ authenticated: isAdmin(req), configured: Boolean(process.env.ADMIN_PASSWORD) }));
+app.post('/api/admin/login', (req, res) => {
+  if (!sameOrigin(req)) return res.status(403).json({ error: 'Недопустимый источник запроса.' });
+  if (!passwordAccepted(req, res)) return;
   const expires = String(Date.now() + SESSION_MS);
   res.setHeader('Set-Cookie', adminCookie(req, `${expires}.${signature(expires)}`, SESSION_MS / 1000));
   res.json({ authenticated: true });
+});
+app.post('/api/reward-access/login', (req, res) => {
+  if (!sameOrigin(req)) return res.status(403).json({ error: 'Недопустимый источник запроса.' });
+  if (!passwordAccepted(req, res)) return;
+  const expiresAt = Date.now() + REWARD_SESSION_MS, expires = String(expiresAt);
+  res.setHeader('Set-Cookie', rewardCookie(req, `${expires}.${rewardSignature(expires)}`, REWARD_SESSION_MS / 1000));
+  res.json({ authenticated: true, expiresAt });
+});
+app.post('/api/reward-access/logout', (req, res) => {
+  if (!sameOrigin(req)) return res.status(403).json({ error: 'Недопустимый источник запроса.' });
+  res.setHeader('Set-Cookie', rewardCookie(req, '', 0));
+  res.json({ authenticated: false });
 });
 app.post('/api/admin/logout', (req, res) => {
   if (!sameOrigin(req)) return res.status(403).json({ error: 'Недопустимый источник запроса.' });
@@ -1396,11 +1426,13 @@ app.post('/api/game-state', async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(409).json({ error: 'Сначала завершите выбор шкатулки.' });
     }
-    if (!isAdmin(req) && (!current.rows.length || protectedChange(before, req.body))) {
+    const adminAccess = isAdmin(req);
+    const deliveryAccess = !adminAccess && hasRewardAccess(req) && rewardDeliveryUpdateValid(before, req.body);
+    if (!adminAccess && !deliveryAccess && (!current.rows.length || protectedChange(before, req.body))) {
       await client.query('ROLLBACK');
       return res.status(403).json({ error: 'Изменять настройки, историю и челленджи может только руководитель группы.' });
     }
-    if (!isAdmin(req) && !publicUpdateValid(before, req.body)) {
+    if (!adminAccess && !deliveryAccess && !publicUpdateValid(before, req.body)) {
       await client.query('ROLLBACK');
       return res.status(422).json({ error: 'Игровые шаги, монетки и награды не совпадают с выполненными действиями.' });
     }
