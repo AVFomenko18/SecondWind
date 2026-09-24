@@ -42,6 +42,8 @@ test('runner has one track coin followed by a finish and a large bonus coin', ()
   assert.match(game, /finishRunnerGame\(true\)/);
   assert.match(page, /source==='runner'/);
   assert.match(page, /'Финиш мини-игры'/);
+  assert.match(page, /Math\.min\(1,Number\.isSafeInteger\(runnerResult\.collected\)/);
+  assert.match(page, /\(\?:coin-\[1-3\]\|finish\)/);
 });
 
 test('procedural hazards are fixed before the run and always leave a fair jump gap', () => {
