@@ -4,7 +4,7 @@ const RUNNER_DURATION_MS=30000;
 const RUNNER_COUNTDOWN_MS=2400;
 const RUNNER_GROUND_SPEED=440;
 const RUNNER_BALL_SPEED=155;
-const RUNNER_HAZARD_GAP_MS=2100;
+const RUNNER_HAZARD_GAP_MS=1350;
 const RUNNER_LIVES=2;
 let miniRunner=null;
 
@@ -39,10 +39,11 @@ function runnerJump(){if(!miniRunner?.active||miniRunner.startedAt===0||miniRunn
 
 function createRunnerCourse(){
   const events=[];
-  let arrival=2800+Math.random()*500;
-  while(arrival<26300){
-    events.push({kind:Math.random()<.58?'barrier':'ball',arrival});
-    arrival+=RUNNER_HAZARD_GAP_MS+Math.random()*500;
+  let arrival=2100+Math.random()*400,block=[];
+  while(arrival<27100){
+    if(!block.length)block=['barrier','barrier','barrier','ball','ball','ball'].sort(()=>Math.random()-.5);
+    events.push({kind:block.pop(),arrival});
+    arrival+=RUNNER_HAZARD_GAP_MS+Math.random()*250;
   }
   events.push({kind:'finish',arrival:28800},{kind:'finish-coin',arrival:29700});
   return events.sort((a,b)=>a.arrival-b.arrival);

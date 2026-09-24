@@ -16,11 +16,11 @@ test('run button opens the 30-second full-body robot runner with jump-only contr
   assert.match(page, /script src="runner-game\.js"/);
   assert.match(page, /href="runner-game\.css"/);
   assert.match(game, /RUNNER_DURATION_MS=30000/);
-  assert.match(game, /'barrier':'ball'/);
+  assert.match(game, /\['barrier','barrier','barrier','ball','ball','ball'\]/);
   assert.match(game, /text:'🏀'/);
   assert.match(game, /RUNNER_GROUND_SPEED=440/);
   assert.match(game, /RUNNER_BALL_SPEED=155/);
-  assert.match(game, /RUNNER_HAZARD_GAP_MS=2100/);
+  assert.match(game, /RUNNER_HAZARD_GAP_MS=1350/);
   assert.match(game, /RUNNER_LIVES=2/);
   assert.match(game, /bottom:142/);
   assert.match(css, /\.runner-object\.barrier/);
@@ -54,14 +54,16 @@ test('runner has no track coins and one large bonus coin after the finish', () =
 test('procedural hazards are fixed before the run and always leave a fair jump gap', () => {
   const start=game.indexOf('function createRunnerCourse(){'),end=game.indexOf('\nfunction spawnRunnerObject(',start);
   const context={Math};vm.createContext(context);
-  vm.runInContext('const RUNNER_HAZARD_GAP_MS=2100;'+game.slice(start,end),context);
+  vm.runInContext('const RUNNER_HAZARD_GAP_MS=1350;'+game.slice(start,end),context);
   for(let run=0;run<100;run++){
     const course=context.createRunnerCourse(),hazards=course.filter(item=>item.kind==='barrier'||item.kind==='ball');
     assert.equal(course.filter(item=>item.kind==='coin').length,0);
     assert.equal(course.filter(item=>item.kind==='finish').length,1);
     assert.equal(course.filter(item=>item.kind==='finish-coin').length,1);
-    assert.ok(hazards.length>=10);
-    for(let i=1;i<hazards.length;i++)assert.ok(hazards[i].arrival-hazards[i-1].arrival>=2100);
+    assert.ok(hazards.length>=15);
+    assert.ok(hazards.filter(item=>item.kind==='barrier').length>=6);
+    assert.ok(hazards.filter(item=>item.kind==='ball').length>=6);
+    for(let i=1;i<hazards.length;i++)assert.ok(hazards[i].arrival-hazards[i-1].arrival>=1350);
   }
   assert.match(game, /placeRunnerCourse\(\)/);
   assert.doesNotMatch(game, /nextObstacleAt/);
