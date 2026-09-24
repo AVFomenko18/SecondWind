@@ -29,6 +29,8 @@ test('run button opens the 30-second full-body robot runner with jump-only contr
   assert.doesNotMatch(page, /Пригнуться/);
   assert.doesNotMatch(page, /стрелка вниз/);
   assert.doesNotMatch(game, /ArrowDown/);
+  assert.match(game, /runnerSessionActive=true/);
+  assert.match(game, /miniRunner=null;runnerSessionActive=false/);
 });
 
 test('runner has one track coin followed by a finish and a large bonus coin', () => {

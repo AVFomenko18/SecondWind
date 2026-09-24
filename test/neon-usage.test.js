@@ -8,10 +8,12 @@ test('game polling pauses for hidden and idle tabs and uses slower refresh inter
   assert.match(html, /REWARD_FEED_REFRESH_MS=60000/);
   assert.match(html, /PRIZE_DATA_REFRESH_MS=60000/);
   assert.match(html, /UI_IDLE_TIMEOUT_MS=5\*60\*1000/);
-  assert.match(html, /document\.visibilityState==='visible'&&Date\.now\(\)-lastUiActivityAt<UI_IDLE_TIMEOUT_MS/);
+  assert.match(html, /document\.visibilityState==='visible'&&!runnerSessionActive&&Date\.now\(\)-lastUiActivityAt<UI_IDLE_TIMEOUT_MS/);
   assert.match(html, /tab==='board'&&backgroundRefreshAllowed\(\).*loadActionCredits/);
   assert.match(html, /tab==='board'&&backgroundRefreshAllowed\(\).*loadRewardFeed/);
   assert.doesNotMatch(html, /setInterval\([^\n]+,5000\)/);
+  assert.match(html, /if\(rewardDataDirty\)\{rewardDataDirty=false;void loadPrizeStock\(\);void loadRewardFeed\(true\)\}/);
+  assert.doesNotMatch(html, /syncStatus\('● Сохранено на сервере'\);void loadPrizeStock\(\);void loadRewardFeed\(true\)/);
 });
 
 test('department polling also stops after inactivity', () => {

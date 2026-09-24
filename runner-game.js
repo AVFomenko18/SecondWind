@@ -14,6 +14,7 @@ function openRunnerGame(){
   if(!player)return toast('Выберите игрока');
   if(steps<1)return toast(player.bank===.5?'Накоплено 0,5 шага. Для хода нужен 1 целый шаг.':'Сначала заработайте шаги.');
   if(miniRunner?.active)return;
+  runnerSessionActive=true;
   const dialog=document.getElementById('runnerDialog'),track=document.getElementById('runnerTrack'),now=performance.now();
   track.querySelectorAll('.runner-object').forEach(node=>node.remove());
   miniRunner={active:true,playerId:player.id,steps,id:'runner-'+uid(),countdownUntil:now+RUNNER_COUNTDOWN_MS,startedAt:0,lastFrame:now,y:0,velocity:0,lives:3,collected:0,objects:[],invulnerableUntil:0,animation:0};
@@ -113,14 +114,14 @@ function finishRunnerGame(finished){
 function completeRunnerGame(finished){
   const game=miniRunner;if(!game)return;
   const player=state.players.find(item=>item.id===game.playerId),dialog=document.getElementById('runnerDialog');
-  dialog.close();miniRunner=null;
+  dialog.close();miniRunner=null;runnerSessionActive=false;
   if(!player)return toast('Участник больше не найден.');
   selected=player.id;movePlayerWithBonus(game.steps,{id:game.id,collected:game.collected,finished:Boolean(finished)});
 }
 
 function skipRunnerGame(){
-  const game=miniRunner;if(!game)return document.getElementById('runnerDialog')?.close();
+  const game=miniRunner;if(!game){runnerSessionActive=false;return document.getElementById('runnerDialog')?.close()}
   if(game.active){game.active=false;cancelAnimationFrame(game.animation);removeEventListener('keydown',runnerKeyDown)}
-  const player=state.players.find(item=>item.id===game.playerId),dialog=document.getElementById('runnerDialog');dialog.close();miniRunner=null;
+  const player=state.players.find(item=>item.id===game.playerId),dialog=document.getElementById('runnerDialog');dialog.close();miniRunner=null;runnerSessionActive=false;
   if(player){selected=player.id;movePlayer(game.steps)}
 }
