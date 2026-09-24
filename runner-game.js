@@ -12,7 +12,7 @@ function openRunnerGame(){
   if(!writable())return;
   const player=pnow(),steps=Math.floor(player?.bank||0);
   if(!player)return toast('Выберите игрока');
-  if(steps<1)return toast(player.bank===.5?'Накоплено 0,5 шага. Для хода нужен 1 целый шаг.':'Сначала заработайте шаги.');
+  if(steps<5)return toast(`Мини-игра доступна от 5 шагов. Сейчас накоплено ${String(player.bank||0).replace('.',',')}.`);
   if(miniRunner?.active)return;
   runnerSessionActive=true;
   const dialog=document.getElementById('runnerDialog'),track=document.getElementById('runnerTrack'),now=performance.now();
