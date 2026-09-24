@@ -12,6 +12,19 @@ test('typing in settings cannot trigger backdrop close', () => {
   assert.ok(page.includes('onsubmit="event.preventDefault();grantManagerCoins(event)"'));
 });
 
+test('closing settings keeps the manager session for reward actions', () => {
+  const closeStart = page.indexOf('async function closeSettings(){');
+  const closeEnd = page.indexOf('\nasync function openGameTab(', closeStart);
+  const logoutStart = page.indexOf('async function logoutSettings(){');
+  const logoutEnd = page.indexOf('\nfunction setSettingsSection(', logoutStart);
+  assert.ok(closeStart >= 0 && closeEnd > closeStart);
+  assert.ok(logoutStart >= 0 && logoutEnd > logoutStart);
+  assert.doesNotMatch(page.slice(closeStart, closeEnd), /adminLogout/);
+  assert.match(page.slice(logoutStart, logoutEnd), /adminLogout\(false\)/);
+  assert.match(page, /onclick="logoutSettings\(\)">Выйти<\/button>/);
+  assert.match(page, /function claim\(i\)\{if\(!adminWrite\(\)\)return;/);
+});
+
 test('an older session response cannot replace the manager settings after login', async () => {
   const start = page.indexOf('async function checkAdmin(){');
   const end = page.indexOf('\nasync function loadSharedUsage(){', start);
