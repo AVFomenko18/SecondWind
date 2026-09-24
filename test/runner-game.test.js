@@ -18,8 +18,10 @@ test('run button opens the 30-second full-body robot runner with jump-only contr
   assert.match(game, /RUNNER_DURATION_MS=30000/);
   assert.match(game, /'barrier':'ball'/);
   assert.match(game, /text:'🏀'/);
-  assert.match(game, /RUNNER_GROUND_SPEED=380/);
-  assert.match(game, /RUNNER_BALL_SPEED=145/);
+  assert.match(game, /RUNNER_GROUND_SPEED=440/);
+  assert.match(game, /RUNNER_BALL_SPEED=155/);
+  assert.match(game, /RUNNER_HAZARD_GAP_MS=2100/);
+  assert.match(game, /RUNNER_LIVES=2/);
   assert.match(game, /bottom:142/);
   assert.match(css, /\.runner-object\.barrier/);
   assert.match(css, /\.runner-robot-head[^}]+#a8eff7/);
@@ -52,13 +54,14 @@ test('runner has no track coins and one large bonus coin after the finish', () =
 test('procedural hazards are fixed before the run and always leave a fair jump gap', () => {
   const start=game.indexOf('function createRunnerCourse(){'),end=game.indexOf('\nfunction spawnRunnerObject(',start);
   const context={Math};vm.createContext(context);
-  vm.runInContext('const RUNNER_HAZARD_GAP_MS=3000;'+game.slice(start,end),context);
+  vm.runInContext('const RUNNER_HAZARD_GAP_MS=2100;'+game.slice(start,end),context);
   for(let run=0;run<100;run++){
     const course=context.createRunnerCourse(),hazards=course.filter(item=>item.kind==='barrier'||item.kind==='ball');
     assert.equal(course.filter(item=>item.kind==='coin').length,0);
     assert.equal(course.filter(item=>item.kind==='finish').length,1);
     assert.equal(course.filter(item=>item.kind==='finish-coin').length,1);
-    for(let i=1;i<hazards.length;i++)assert.ok(hazards[i].arrival-hazards[i-1].arrival>=3000);
+    assert.ok(hazards.length>=10);
+    for(let i=1;i<hazards.length;i++)assert.ok(hazards[i].arrival-hazards[i-1].arrival>=2100);
   }
   assert.match(game, /placeRunnerCourse\(\)/);
   assert.doesNotMatch(game, /nextObstacleAt/);

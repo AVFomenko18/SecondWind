@@ -2,9 +2,10 @@
 
 const RUNNER_DURATION_MS=30000;
 const RUNNER_COUNTDOWN_MS=2400;
-const RUNNER_GROUND_SPEED=380;
-const RUNNER_BALL_SPEED=145;
-const RUNNER_HAZARD_GAP_MS=3000;
+const RUNNER_GROUND_SPEED=440;
+const RUNNER_BALL_SPEED=155;
+const RUNNER_HAZARD_GAP_MS=2100;
+const RUNNER_LIVES=2;
 let miniRunner=null;
 
 function openRunnerGame(){
@@ -16,10 +17,10 @@ function openRunnerGame(){
   runnerSessionActive=true;
   const dialog=document.getElementById('runnerDialog'),track=document.getElementById('runnerTrack'),now=performance.now();
   track.querySelectorAll('.runner-object').forEach(node=>node.remove());
-  miniRunner={active:true,playerId:player.id,steps,id:'runner-'+uid(),countdownUntil:now+RUNNER_COUNTDOWN_MS,startedAt:0,lastFrame:now,y:0,velocity:0,lives:3,collected:0,objects:[],invulnerableUntil:0,animation:0};
+  miniRunner={active:true,playerId:player.id,steps,id:'runner-'+uid(),countdownUntil:now+RUNNER_COUNTDOWN_MS,startedAt:0,lastFrame:now,y:0,velocity:0,lives:RUNNER_LIVES,collected:0,objects:[],invulnerableUntil:0,animation:0};
   document.getElementById('runnerTime').textContent='30';
   document.getElementById('runnerCoins').textContent='0';
-  document.getElementById('runnerLives').textContent='♥♥♥';
+  document.getElementById('runnerLives').textContent='♥'.repeat(RUNNER_LIVES);
   document.getElementById('runnerResult').hidden=true;
   const countdown=document.getElementById('runnerCountdown');countdown.hidden=false;countdown.textContent='3';
   const robot=document.getElementById('runnerRobot');robot.className='runner-robot';robot.style.bottom='23px';
@@ -41,7 +42,7 @@ function createRunnerCourse(){
   let arrival=2800+Math.random()*500;
   while(arrival<26300){
     events.push({kind:Math.random()<.58?'barrier':'ball',arrival});
-    arrival+=RUNNER_HAZARD_GAP_MS+Math.random()*700;
+    arrival+=RUNNER_HAZARD_GAP_MS+Math.random()*500;
   }
   events.push({kind:'finish',arrival:28800},{kind:'finish-coin',arrival:29700});
   return events.sort((a,b)=>a.arrival-b.arrival);
@@ -87,7 +88,7 @@ function runnerFrame(now){
       if(item.kind==='finish-coin'){
         item.removed=true;document.getElementById('runnerCoins').textContent=String(game.collected+1);item.element.classList.add('collected');setTimeout(()=>item.element.remove(),300);
       }else if((item.kind==='barrier'||item.kind==='ball')&&now>=game.invulnerableUntil){
-        item.removed=true;item.element.remove();game.lives--;game.invulnerableUntil=now+1300;document.getElementById('runnerLives').textContent='♥'.repeat(game.lives)+'♡'.repeat(3-game.lives);const robot=document.getElementById('runnerRobot');robot.classList.add('hit');setTimeout(()=>robot?.classList.remove('hit'),950);if(game.lives<=0){finishRunnerGame(false);return}
+        item.removed=true;item.element.remove();game.lives--;game.invulnerableUntil=now+1100;document.getElementById('runnerLives').textContent='♥'.repeat(game.lives)+'♡'.repeat(RUNNER_LIVES-game.lives);const robot=document.getElementById('runnerRobot');robot.classList.add('hit');setTimeout(()=>robot?.classList.remove('hit'),850);if(game.lives<=0){finishRunnerGame(false);return}
       }
     }
     if(item.x+item.width<0){item.removed=true;item.element.remove()}
