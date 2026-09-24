@@ -11,9 +11,10 @@ test('payments, activity days and cross-sales share one compact roster row', () 
 
 test('the first three ranked managers get gold, silver and bronze podium frames', () => {
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-  assert.match(html, /\.person\.podium-1\{[^}]*border-color:#d6a92f/);
-  assert.match(html, /\.person\.podium-2\{[^}]*border-color:#aeb7bd/);
-  assert.match(html, /\.person\.podium-3\{[^}]*border-color:#b9754d/);
+  assert.match(html, /\.person\.podium-1\{[^}]*--podium-metal:linear-gradient/);
+  assert.match(html, /\.person\.podium-2\{[^}]*--podium-metal:linear-gradient/);
+  assert.match(html, /\.person\.podium-3\{[^}]*--podium-metal:linear-gradient/);
+  assert.match(html, /\.podium-badge\{position:absolute;[^}]*top:-20px;right:11px;[^}]*font:900 19px/);
   assert.match(html, /\.map\(\(x,rank\)=>/);
   assert.match(html, /rank===0\?'🏆':rank===1\?'🥈':'🥉'/);
   assert.doesNotMatch(html, /<b>\$\{state\.players\.indexOf\(x\)\+1\}\./);

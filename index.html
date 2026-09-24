@@ -70,12 +70,13 @@ body:not(.field-expanded) .arena-layout{grid-template-columns:380px minmax(0,1fr
 .arena-left .person .sport-sprite{flex:0 0 78px;width:78px;height:90px}
 .arena-left .person{min-height:104px;column-gap:13px}
 @media(max-width:700px){.arena-left .person .sport-sprite{flex-basis:72px;width:72px;height:84px}}
-.arena-left .person.podium{position:relative;margin:8px 0;padding:12px 10px;border:2px solid;border-radius:12px;box-shadow:0 4px 0 var(--podium-shadow),0 10px 24px #29382f12}
-.arena-left .person.podium-1{--podium-shadow:#c59a31;border-color:#d6a92f;background:linear-gradient(135deg,#fff9df,#f4df9c55)}
-.arena-left .person.podium-2{--podium-shadow:#9aa1a5;border-color:#aeb7bd;background:linear-gradient(135deg,#fffdf3,#dce2e555)}
-.arena-left .person.podium-3{--podium-shadow:#9d633e;border-color:#b9754d;background:linear-gradient(135deg,#fff8ea,#dfad8755)}
-.podium-badge{display:inline-flex;align-items:center;gap:3px;margin-right:5px;padding:3px 7px;border:1px solid currentColor;border-radius:999px;font-size:11px;line-height:1;background:#fffaf0;white-space:nowrap}
-.podium-1 .podium-badge{color:#9a6a00;background:#fff0b8}.podium-2 .podium-badge{color:#657078;background:#eef2f3}.podium-3 .podium-badge{color:#8b4c2d;background:#f4d5bd}
+.arena-left .person.podium{position:relative;margin:17px 0;padding:13px 11px;border:3px solid transparent;border-radius:14px;background:linear-gradient(var(--podium-paper),var(--podium-paper)) padding-box,var(--podium-metal) border-box;box-shadow:inset 0 1px 0 #fff9,inset 0 -1px 0 #4b382418,0 5px 0 var(--podium-shadow),0 12px 26px #29382f1c}
+.arena-left .person.podium-1{--podium-paper:#fff7d9;--podium-shadow:#a86d0e;--podium-metal:linear-gradient(135deg,#fff4a6 0%,#d8a319 22%,#8f5705 44%,#ffe776 65%,#b87809 82%,#fff1a0 100%)}
+.arena-left .person.podium-2{--podium-paper:#f8f8f4;--podium-shadow:#7b878e;--podium-metal:linear-gradient(135deg,#fff 0%,#bcc6cc 20%,#6e7b84 43%,#f1f5f7 64%,#89969e 82%,#fff 100%)}
+.arena-left .person.podium-3{--podium-paper:#fff1e3;--podium-shadow:#844528;--podium-metal:linear-gradient(135deg,#ffd1ac 0%,#bd7046 22%,#71351f 44%,#eda26d 65%,#965033 82%,#ffd7b8 100%)}
+.podium-badge{position:absolute;z-index:4;top:-20px;right:11px;display:flex;align-items:center;justify-content:center;gap:6px;min-width:66px;height:42px;padding:0 12px;border:3px solid transparent;border-radius:13px;background:linear-gradient(var(--badge-paper),var(--badge-paper)) padding-box,var(--badge-metal) border-box;box-shadow:inset 0 1px 0 #fff,0 4px 0 var(--badge-shadow),0 7px 14px #21352c32;font:900 19px/1 Georgia,serif;white-space:nowrap;filter:saturate(1.08)}
+.podium-1 .podium-badge{--badge-paper:#fff2b9;--badge-shadow:#9b660b;--badge-metal:linear-gradient(135deg,#fff7aa,#c68b0d 38%,#ffea72 62%,#9d6405);color:#704600}.podium-2 .podium-badge{--badge-paper:#f1f5f6;--badge-shadow:#727f87;--badge-metal:linear-gradient(135deg,#fff,#89969e 38%,#eef4f7 62%,#6f7c84);color:#4d5960}.podium-3 .podium-badge{--badge-paper:#f5d1b5;--badge-shadow:#7d4026;--badge-metal:linear-gradient(135deg,#ffd2af,#a95c37 38%,#efaa77 62%,#75402b);color:#713b23}
+@media(max-width:700px){.podium-badge{top:-18px;right:8px;min-width:60px;height:38px;padding:0 9px;font-size:17px}}
 
 .case-panel{margin:24px 0;padding:26px;border:5px double #c9a559;border-radius:16px;background:radial-gradient(circle at 50% 0,#3d7655,#1b4737 68%);color:#fff5ce;box-shadow:0 8px 0 #d5c7a6,0 18px 40px #183d3529;overflow:hidden}
 .case-panel h3{font:700 clamp(26px,3vw,42px) Georgia,serif;margin:8px 0}.case-panel p{color:#dce7ca;font-size:14px;line-height:1.5}.case-panel .case-price{display:inline-block;padding:7px 14px;border-radius:20px;background:#f2d690;color:#2d4734;font-weight:800}
