@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
 import { publicUpdateValid } from '../game-integrity.js';
 
 const page = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
@@ -19,8 +20,9 @@ test('run button opens the 30-second full-body robot runner with jump-only contr
   assert.match(game, /text:'🏀'/);
   assert.match(game, /RUNNER_GROUND_SPEED=380/);
   assert.match(game, /RUNNER_BALL_SPEED=145/);
-  assert.match(game, /bottom:118/);
+  assert.match(game, /bottom:142/);
   assert.match(css, /\.runner-object\.barrier/);
+  assert.match(css, /\.runner-robot-head[^}]+#a8eff7/);
   assert.match(page, /runner-robot-torso/);
   assert.match(page, /runner-robot-leg left/);
   assert.doesNotMatch(page, /runnerDuck/);
@@ -29,11 +31,30 @@ test('run button opens the 30-second full-body robot runner with jump-only contr
   assert.doesNotMatch(game, /ArrowDown/);
 });
 
-test('runner can award up to three collected coins and one finish coin', () => {
-  assert.match(game, /RUNNER_MAX_COINS=3/);
+test('runner has one track coin followed by a finish and a large bonus coin', () => {
+  assert.match(game, /RUNNER_MAX_COINS=1/);
+  assert.match(game, /kind:'finish',arrival:28800/);
+  assert.match(game, /kind:'finish-coin',arrival:29700/);
+  assert.match(css, /\.runner-object\.finish\{/);
+  assert.match(css, /\.runner-object\.finish-coin\{/);
   assert.match(game, /finishRunnerGame\(true\)/);
   assert.match(page, /source==='runner'/);
   assert.match(page, /'Финиш мини-игры'/);
+});
+
+test('procedural hazards are fixed before the run and always leave a fair jump gap', () => {
+  const start=game.indexOf('function createRunnerCourse(){'),end=game.indexOf('\nfunction spawnRunnerObject(',start);
+  const context={Math};vm.createContext(context);
+  vm.runInContext('const RUNNER_HAZARD_GAP_MS=3000;'+game.slice(start,end),context);
+  for(let run=0;run<100;run++){
+    const course=context.createRunnerCourse(),hazards=course.filter(item=>item.kind==='barrier'||item.kind==='ball');
+    assert.equal(course.filter(item=>item.kind==='coin').length,1);
+    assert.equal(course.filter(item=>item.kind==='finish').length,1);
+    assert.equal(course.filter(item=>item.kind==='finish-coin').length,1);
+    for(let i=1;i<hazards.length;i++)assert.ok(hazards[i].arrival-hazards[i-1].arrival>=3000);
+  }
+  assert.match(game, /placeRunnerCourse\(\)/);
+  assert.doesNotMatch(game, /nextObstacleAt/);
 });
 
 test('a public run may append bounded runner rewards only together with movement', () => {
@@ -52,6 +73,8 @@ test('a public run may append bounded runner rewards only together with movement
   assert.equal(publicUpdateValid(before, after), true);
   const forged = structuredClone(after);forged.players=[player];
   assert.equal(publicUpdateValid(before, forged), false);
-  const tooMany = structuredClone(after);tooMany.ledger.push(entry('coin-2'),entry('coin-3'),{...entry('coin-3'),id:'extra',ref:'runner-other-coin-1'});
+  const tooMany = structuredClone(after);tooMany.ledger.push(entry('coin-2'));
   assert.equal(publicUpdateValid(before, tooMany), false);
+  const twoRuns = structuredClone(after);twoRuns.ledger[1]={...twoRuns.ledger[1],ref:'runner-other-finish'};
+  assert.equal(publicUpdateValid(before, twoRuns), false);
 });

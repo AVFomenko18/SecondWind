@@ -160,16 +160,18 @@ export function publicUpdateValid(before, after, verifyHistory = true) {
     }
   }
   const additions = after.ledger.slice(before.ledger.length);
-  const runnerCounts = new Map(), runnerFinishes = new Set();
+  const runnerCounts = new Map(), runnerFinishes = new Set(), runnerRuns = new Map();
   if (additions.length < expectedMilestones.size || additions.length > expectedMilestones.size + movedPlayers.size * 4) return false;
   for (const entry of additions) {
     if (entry?.source === 'runner') {
       if (!movedPlayers.has(entry.playerId) || entry.amount !== 1 || typeof entry.id !== 'string' || !entry.id ||
-          typeof entry.ref !== 'string' || !/^runner-[A-Za-z0-9-]{1,90}-(?:coin-[1-3]|finish)$/.test(entry.ref) ||
+          typeof entry.ref !== 'string' || !/^runner-[A-Za-z0-9-]{1,90}-(?:coin-1|finish)$/.test(entry.ref) ||
           typeof entry.title !== 'string' || !Number.isFinite(Date.parse(entry.at))) return false;
-      const run = entry.ref.replace(/-(?:coin-[1-3]|finish)$/, ''), key = entry.playerId + ':' + run;
+      const run = entry.ref.replace(/-(?:coin-1|finish)$/, ''), key = entry.playerId + ':' + run;
+      if (runnerRuns.has(entry.playerId) && runnerRuns.get(entry.playerId) !== run) return false;
+      runnerRuns.set(entry.playerId, run);
       runnerCounts.set(key, (runnerCounts.get(key) || 0) + 1);
-      if (runnerCounts.get(key) > 4) return false;
+      if (runnerCounts.get(key) > 2) return false;
       if (entry.ref.endsWith('-finish')) {
         if (runnerFinishes.has(key)) return false;
         runnerFinishes.add(key);
