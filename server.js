@@ -15,6 +15,7 @@ const FOMENKO_ACTION_CREDIT_GRANT_MIGRATION = '2026-09-22-grant-alexander-fomenk
 const ACTIVITY_CREDIT_GRANT_MIGRATION = '2026-09-22-grant-activity-70-percent-for-2026-09-21-v1';
 const ACTIVITY_CREDIT_GRANT_2026_09_22_MIGRATION = '2026-09-23-grant-activity-70-percent-for-2026-09-22-v1';
 const ACTIVITY_CREDIT_GRANT_2026_09_23_MIGRATION = '2026-09-24-grant-activity-70-percent-for-2026-09-23-v1';
+const ACTIVITY_CREDIT_GRANT_2026_09_24_MIGRATION = '2026-09-25-grant-activity-70-percent-for-2026-09-24-v1';
 const ZINKEVICH_PAYMENT_CREDIT_CORRECTION = '2026-09-22-move-zinkevich-high-payment-to-mid-v1';
 const MANAGER_NAME_SYNC_MIGRATION = '2026-09-22-correct-five-manager-names-and-resync-v2';
 const MISSING_SALES_NAMES_SYNC_MIGRATION = '2026-09-23-backfill-missing-sales-names-and-resync-v1';
@@ -60,6 +61,19 @@ const ACTIVITY_CREDIT_GRANTS_2026_09_23 = Object.freeze({
   klimentovich: ['Соколовский Александр', 'Яловегин Николай', 'Ильницкий Илларион', 'Гончарова Ирина', 'Журавлева Евгения', 'Зинкевич Елизавета'],
   tolstov: ['Прохорова Василиса', 'Романова Людмила', 'Квон Екатерина', 'Умнова Виктория'],
   bagaturiya: ['Белеева Мария', 'Лем Станислав', 'Михайлова Карина', 'Брудковски Александра', 'Гагилев Дмитрий', 'Золотарев Игорь']
+});
+const ACTIVITY_CREDIT_GRANTS_2026_09_24 = Object.freeze({
+  otrakusha: ['Лобков Артур', 'Зинченко Алена'],
+  kulikov: ['Ильина Диана', 'Беспалов Евгений'],
+  kondratyev: ['Шапошникова Натали'],
+  chekhova: ['Крестьянникова Александра', 'Гурулёва Дарья', 'Шарапова Анастасия'],
+  fomenko: ['Дубровина Ольга', 'Попова Анастасия', 'Красовский Антон', 'Мишин Иван', 'Байраковский Кирилл'],
+  lvovsky: ['Кузнецова Екатерина', 'Шмаков Юрий', 'Зыбченко Анастасия', 'Сопилкина Наталья', 'Соловьева Светлана'],
+  shabanov: ['Константинова Екатерина', 'Левченко Владислав', 'Пименова Виктория', 'Тихомирова Алина'],
+  kozhanov: ['Печинога Валерия', 'Шеханова Лилия', 'Негреева Диана', 'Агаджанян Валерия'],
+  klimentovich: ['Яловегин Николай', 'Ильницкий Илларион', 'Гончарова Ирина', 'Денежкин Никита', 'Зинкевич Елизавета'],
+  tolstov: ['Прохорова Василиса', 'Романова Людмила', 'Квон Екатерина'],
+  bagaturiya: ['Белеева Мария', 'Фролова Екатерина', 'Лем Станислав', 'Михайлова Карина', 'Брудковски Александра', 'Гагилев Дмитрий', 'Золотарев Игорь']
 });
 const MANAGER_NAME_SYNCS = Object.freeze([
   { team: 'otrakusha', name: 'Пасхалиди Димитрий', aliases: ['Пасхалиди Дмитрий'] },
@@ -807,6 +821,7 @@ function ensureTable() {
       await grantActivityCredits();
       await grantActivityCredits(ACTIVITY_CREDIT_GRANTS_2026_09_22, ACTIVITY_CREDIT_GRANT_2026_09_22_MIGRATION, '22.09.2026');
       await grantActivityCredits(ACTIVITY_CREDIT_GRANTS_2026_09_23, ACTIVITY_CREDIT_GRANT_2026_09_23_MIGRATION, '23.09.2026');
+      await grantActivityCredits(ACTIVITY_CREDIT_GRANTS_2026_09_24, ACTIVITY_CREDIT_GRANT_2026_09_24_MIGRATION, '24.09.2026');
       await correctZinkevichPaymentCredit();
       for (const item of catalog.filter(item => item.superPrize)) {
         const id = item.id;
